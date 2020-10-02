@@ -5,8 +5,7 @@
 A környezet teljesen a 3D geometria tárgyban kapott keretre épül. A beüzemelése azzal megegyezik.
 
 ## Teszt-modellek
-
-Látható, hogy a teszthez használt modellek a `testmodels/` mappában vannak. Egy adott teszt-modell több különböző fájlból épül fel. Ezért készítettem egy összefogó .txt -t hogy könnyebb legyen a betöltés.
+Készítettem Fusion 360-ban egy tesztmodellt, amely `testmodels/` mappában van. Egy adott teszt-modell több különböző fájlból épül fel. Ezért készítettem egy összefogó .txt -t hogy könnyebb legyen a betöltés.
 A betöltéshez az elindított tesztprogramon belül a `File/Open` menün belül a load-in.txt kell kiválsztani, amely betölti az összes modellt megfelelően. `(testmodels/2D_01/load-in.txt)`
 ![open](https://user-images.githubusercontent.com/36598710/94906825-6d993380-049f-11eb-9bf4-a7437aac6255.JPG)
 
