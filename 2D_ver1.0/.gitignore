@@ -9,4 +9,6 @@ qrc_*
 *.stash
 Makefile
 .qglviewer.xml
+x64
+release
 
