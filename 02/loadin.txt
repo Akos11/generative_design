@@ -1,0 +1,41 @@
+generated3.stl
+.
+keep_in_1.stl
+circle
+center	[0,70,0]
+radius	10
+axis	[0,0,1]
+keepin 	1
+keepout	0
+.
+keep_in_2.stl
+circle
+center	[70,0,0]
+radius	15
+axis	[0,0,1]
+keepin 	1
+keepout	0
+.
+keep_in_3.stl
+circle
+center	[-70,0,0]
+radius	15
+axis	[0,0,1]
+keepin 	1
+keepout	0
+.
+keep_out_1.stl
+circle
+center	[-45,50,0]
+radius	15
+axis	[0,0,1]
+keepin 	0
+keepout	1
+.
+keep_out_2.stl
+circle
+center	[45,50,0]
+radius	15
+axis	[0,0,1]
+keepin 	0
+keepout	1
