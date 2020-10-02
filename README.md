@@ -13,5 +13,5 @@ A betöltéshez az elindított tesztprogramon belül a `File/Open` menün belül
 
 A jelenlegi kódban az eredeti környezetben használt gyorsbillentyűk működnek. pl. ` W - wireframed `
 Az új funkciókhoz tartozó billentyűk:
-- 1 - a kényszer alakzatok megjelenítése/eltűntetése
-- 2 - a háromszögek szegmentálása az alapján, hogy melyek tartoznak egyes kényszer alakzatokhoz
+- **1** - a kényszer alakzatok megjelenítése/eltűntetése
+- **2** - a háromszögek szegmentálása az alapján, hogy melyek tartoznak egyes kényszer alakzatokhoz
