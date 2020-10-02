@@ -1,0 +1,12 @@
+sample-framework
+*~
+.\#*
+*.o
+*.stl
+*.ply
+moc_*
+qrc_*
+*.stash
+Makefile
+.qglviewer.xml
+
