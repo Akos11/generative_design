@@ -394,13 +394,20 @@ void MyViewer::setupCamera() {
 }
 
 bool MyViewer::openMesh(const std::string& filename, bool update_view) {
-	if (!OpenMesh::IO::read_mesh(mesh, filename) || mesh.n_vertices() == 0)
+	OpenMesh::IO::Options opt(OpenMesh::IO::Options::Status);
+	qDebug() << opt;
+	if (!OpenMesh::IO::read_mesh(mesh, filename, opt) || mesh.n_vertices() == 0)
 		return false;
+	mesh.request_vertex_status();
+	mesh.request_halfedge_status();
+	mesh.request_edge_status();
+	mesh.request_face_status();
 	model_type = ModelType::MESH;
 	last_filename = filename;
 	updateMesh(update_view);
 	if (update_view)
 		setupCamera();
+	
 	return true;
 }
 
@@ -431,6 +438,8 @@ bool MyViewer::openGenerative(const std::string& filename, bool update_view) {
 	//qDebug()<< (filename.substr(0, filename.find_last_of("/")) + "/mesh.stl").data();
 	//MyViewer::openMesh(filename.substr(0, filename.find_last_of("/")) + "/mesh.stl");
 	std::string folder = filename.substr(0, filename.find_last_of("/"));
+	OpenMesh::IO::Options opt;
+	opt += OpenMesh::IO::Options::Status;
 	std::ifstream f(filename.c_str());
 	if (f)
 	{
@@ -503,7 +512,7 @@ bool MyViewer::openGenerative(const std::string& filename, bool update_view) {
 
 
 				if (keepIn) {
-					OpenMesh::IO::Options opt;
+					//OpenMesh::IO::Options opt;
 					qDebug() << meshfile.data();
 					if (!OpenMesh::IO::read_mesh(keepInContsraint, meshfile, opt, false) || keepInContsraint.n_vertices() == 0)
 						return false;
@@ -516,7 +525,7 @@ bool MyViewer::openGenerative(const std::string& filename, bool update_view) {
 					}
 				}
 				else if (keepOut) {
-					OpenMesh::IO::Options opt;
+					//OpenMesh::IO::Options opt;
 					qDebug() << meshfile.data();
 					if (!OpenMesh::IO::read_mesh(keepOutConstraint, meshfile, opt, false) || keepOutConstraint.n_vertices() == 0)
 						return false;
@@ -884,7 +893,7 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			calculateIncidence();
 			break;
 		case Qt::Key_3:
-			reMeshOrganicBoundaries();
+			reMeshOrganicBoundaries(4,1);
 			break;
 		default:
 			QGLViewer::keyPressEvent(e);

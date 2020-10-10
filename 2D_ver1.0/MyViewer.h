@@ -57,7 +57,6 @@ private:
 	};
 	using MyMesh = OpenMesh::TriMesh_ArrayKernelT<MyTraits>;
 	using Vector = OpenMesh::VectorT<double, 3>;
-
 	class generativeDesign;
 
 	// Mesh
@@ -86,8 +85,13 @@ private:
 
 	//generative
 	void calculateIncidence();
-	void reMeshOrganicBoundaries();
-
+	void reMeshOrganicBoundaries(double L, int iterations);
+	void reMeshEdgeLength(double L);
+	void reMeshVertexValences();
+	void reMeshVertexPositions();
+	void collapse2(MyMesh::HalfedgeHandle _hh);
+	void collapse_edge2(MyMesh::HalfedgeHandle _hh);
+	void collapse_loop2(MyMesh::HalfedgeHandle _hh);
 	//////////////////////
 	// Member variables //
 	//////////////////////
