@@ -58,6 +58,8 @@ private:
 	using MyMesh = OpenMesh::TriMesh_ArrayKernelT<MyTraits>;
 	using Vector = OpenMesh::VectorT<double, 3>;
 
+	class generativeDesign;
+
 	// Mesh
 	void updateMesh(bool update_mean_range = true);
 	void updateVertexNormals();
@@ -84,6 +86,7 @@ private:
 
 	//generative
 	void calculateIncidence();
+	void reMeshOrganicBoundaries();
 
 	//////////////////////
 	// Member variables //

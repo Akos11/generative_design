@@ -876,13 +876,15 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			fairMesh();
 			update();
 			break;
-
-		case Qt::Key_2:
-			calculateIncidence();
-			break;
 		case Qt::Key_1:
 			show_constraints = !show_constraints;
 			update();
+			break;
+		case Qt::Key_2:
+			calculateIncidence();
+			break;
+		case Qt::Key_3:
+			reMeshOrganicBoundaries();
 			break;
 		default:
 			QGLViewer::keyPressEvent(e);
@@ -1036,19 +1038,3 @@ QString MyViewer::helpString() const {
 	return text;
 }
 
-//Generative Design
-void MyViewer::calculateIncidence() {
-	// Compute mean values using dihedral angles
-	for (auto v : mesh.vertices()) {
-		int i = 0;
-		for (auto& solid : constraint_solids) {
-			if (solid->isInside(mesh.point(v)))
-				mesh.data(v).I.push_back(i);
-			i++;
-
-
-		}
-	}
-	updateMesh();
-	update();
-}
