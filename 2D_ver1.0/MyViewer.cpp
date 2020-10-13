@@ -298,6 +298,14 @@ void MyViewer::updateVertexNormals() {
 	//     Journal of Graphics Tools, Vol. 4(2), 1999.
 	for (auto v : mesh.vertices()) {
 		Vector n(0.0, 0.0, 0.0);
+		//qDebug() << "AAA";
+		//MyMesh::ConstVertexIHalfedgeIter  hi = mesh.vih_range(v).begin();
+		//qDebug() << hi++ ->idx();
+		//qDebug() << hi++->idx();		
+		//qDebug() << hi++->idx();
+		//qDebug() << hi++->idx();
+		//qDebug() << hi++->idx();
+		//qDebug() << "*Vertex: " << v.idx();
 		for (auto h : mesh.vih_range(v)) {
 			if (mesh.is_boundary(h))
 				continue;
@@ -305,6 +313,7 @@ void MyViewer::updateVertexNormals() {
 			auto out_vec = mesh.calc_edge_vector(mesh.next_halfedge_handle(h));
 			double w = in_vec.sqrnorm() * out_vec.sqrnorm();
 			n += (in_vec % out_vec) / (w == 0.0 ? 1.0 : w);
+			//qDebug() << "       From: " << mesh.from_vertex_handle(h).idx() << " To: " << mesh.to_vertex_handle(h).idx();
 		}
 		double len = n.length();
 		if (len != 0.0)
@@ -353,7 +362,9 @@ void MyViewer::updateMesh(bool update_mean_range) {
 		generateMesh();
 	mesh.request_face_normals(); mesh.request_vertex_normals();
 	mesh.update_face_normals(); //mesh.update_vertex_normals();
+	
 	updateVertexNormals();
+
 	updateMeanCurvature(update_mean_range);
 }
 
@@ -893,7 +904,7 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			calculateIncidence();
 			break;
 		case Qt::Key_3:
-			reMeshOrganicBoundaries(4,1);
+			reMeshOrganicBoundaries(0.005,1);
 			break;
 		default:
 			QGLViewer::keyPressEvent(e);

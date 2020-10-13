@@ -92,6 +92,8 @@ private:
 	void collapse2(MyMesh::HalfedgeHandle _hh);
 	void collapse_edge2(MyMesh::HalfedgeHandle _hh);
 	void collapse_loop2(MyMesh::HalfedgeHandle _hh);
+
+	bool is_collapse_ok2(MyMesh::HalfedgeHandle v0v1);
 	//////////////////////
 	// Member variables //
 	//////////////////////
