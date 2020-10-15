@@ -531,7 +531,7 @@ bool MyViewer::openGenerative(const std::string& filename, bool update_view) {
 					qDebug() << meshfile.data();
 					for (auto f : keepInContsraint.faces()) {
 						for (auto v : keepInContsraint.fv_range(f)) {
-							keepInContsraint.point(v)[2] += 0.001;
+							keepInContsraint.point(v)[2] += 0.011;
 						}
 					}
 				}
@@ -543,7 +543,7 @@ bool MyViewer::openGenerative(const std::string& filename, bool update_view) {
 					qDebug() << meshfile.data();
 					for (auto f : keepOutConstraint.faces()) {
 						for (auto v : keepOutConstraint.fv_range(f)) {
-							keepOutConstraint.point(v)[2] += 0.001;
+							keepOutConstraint.point(v)[2] += 0.011;
 						}
 					}
 				}
@@ -675,7 +675,14 @@ void MyViewer::draw() {
 			glBegin(GL_POLYGON);
 			for (auto v : mesh.fv_range(f))
 			{
+				if (mesh.status(v).tagged())
+					glColor3d(1.0, 1.0, 0.0);
+				//if (mesh.is_boundary(v))
+				//	glColor3d(0.0, 1.0, 0.0);
+				/*if (mesh.status(v).tagged2())
+					glColor3d(1.0, 1.0, 0.0);*/
 				glVertex3dv(mesh.point(v).data());
+				glColor3d(0.0, 0.0, 0.0);
 			}
 				
 			glEnd();
@@ -904,7 +911,10 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			calculateIncidence();
 			break;
 		case Qt::Key_3:
-			reMeshOrganicBoundaries(0.005,1);
+			reMeshOrganicBoundaries(1.0,5);
+			break;
+		case Qt::Key_4:
+			reMeshSmoothing(5);
 			break;
 		default:
 			QGLViewer::keyPressEvent(e);

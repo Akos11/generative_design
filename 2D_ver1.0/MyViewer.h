@@ -53,6 +53,7 @@ private:
 		VertexTraits{
 		  double mean;              // approximated mean curvature
 		  std::vector<int> I;
+		  OpenMesh::Vec3d newPos;
 		};
 	};
 	using MyMesh = OpenMesh::TriMesh_ArrayKernelT<MyTraits>;
@@ -84,14 +85,22 @@ private:
 	void fairMesh();
 
 	//generative
-	void calculateIncidence();
-	void reMeshOrganicBoundaries(double L, int iterations);
-	void reMeshEdgeLength(double L);
-	void reMeshVertexValences();
-	void reMeshVertexPositions();
-	void collapse2(MyMesh::HalfedgeHandle _hh);
-	void collapse_edge2(MyMesh::HalfedgeHandle _hh);
-	void collapse_loop2(MyMesh::HalfedgeHandle _hh);
+		void calculateIncidence();
+		//Remesh
+		void reMeshTagvertices();
+		void reMeshOrganicBoundaries(double L, int iterations);
+		void reMeshEdgeLength(double L);
+		void reMeshVertexValences();
+		void reMeshVertexPositions();
+		void reMeshSmoothing(int iterations);
+		void reMeshSmoothingIteration();
+		bool checkIfEdgeTagged(MyMesh::EdgeHandle eh);
+		bool checkIfEdgeTagged(MyMesh::HalfedgeHandle hh);
+		bool checkIfBetweenRegions(MyMesh::VertexHandle vh);
+	//void collapse2(MyMesh::HalfedgeHandle _hh);
+	//void collapse_edge2(MyMesh::HalfedgeHandle _hh);
+	//void collapse_loop2(MyMesh::HalfedgeHandle _hh);
+
 
 	bool is_collapse_ok2(MyMesh::HalfedgeHandle v0v1);
 	//////////////////////
