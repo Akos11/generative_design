@@ -1,12 +1,12 @@
 // -*- mode: c++ -*-
 #pragma once
-
 #include <string>
 
 #include <QGLViewer/qglviewer.h>
 #include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>
 #include "ConstraintSolid.h"
 #include "CircleSolid.h"
+
 
 using qglviewer::Vec;
 
@@ -31,7 +31,6 @@ public:
 	bool openBezier(const std::string& filename, bool update_view = true);
 	bool openGenerative(const std::string& filename, bool update_view = true);
 	bool saveBezier(const std::string& filename);
-
 signals:
 	void startComputation(QString message);
 	void midComputation(int percent);
@@ -47,6 +46,10 @@ protected:
 	virtual QString helpString() const override;
 
 private:
+	struct Flags {
+		bool tagged;
+		bool temporary_tagged;
+	};
 	struct MyTraits : public OpenMesh::DefaultTraits {
 		using Point = OpenMesh::Vec3d; // the default would be Vec3f
 		using Normal = OpenMesh::Vec3d;
@@ -54,6 +57,7 @@ private:
 		  double mean;              // approximated mean curvature
 		  std::vector<int> I;
 		  OpenMesh::Vec3d newPos;
+		  Flags flags;
 		};
 	};
 	using MyMesh = OpenMesh::TriMesh_ArrayKernelT<MyTraits>;
@@ -85,6 +89,7 @@ private:
 	void fairMesh();
 
 	//generative
+		void resetFlags();
 		void calculateIncidence();
 		//Remesh
 		void reMeshTagvertices();

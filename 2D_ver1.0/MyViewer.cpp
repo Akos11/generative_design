@@ -675,7 +675,7 @@ void MyViewer::draw() {
 			glBegin(GL_POLYGON);
 			for (auto v : mesh.fv_range(f))
 			{
-				if (mesh.status(v).tagged())
+				if (mesh.data(v).flags.tagged)
 					glColor3d(1.0, 1.0, 0.0);
 				//if (mesh.is_boundary(v))
 				//	glColor3d(0.0, 1.0, 0.0);

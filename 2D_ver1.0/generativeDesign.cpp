@@ -1,6 +1,15 @@
 #include "MyViewer.h"
 #include <OpenMesh/Tools/Smoother/JacobiLaplaceSmootherT.hh>
+#include <iostream>
 
+
+void MyViewer::resetFlags() {
+	for (auto v : mesh.vertices()) {
+		mesh.data(v).flags.tagged = false;
+		mesh.data(v).flags.temporary_tagged = false;
+
+	}
+}
 //Generative Design
 void MyViewer::calculateIncidence() {
 	//mesh.reset_status();
@@ -167,7 +176,7 @@ void MyViewer::reMeshEdgeLength(double L) {
 						mesh.point(mesh.to_vertex_handle(mesh.halfedge_handle(*it, 0))))
 					/ 2;
 				MyMesh::VertexHandle tempVh = mesh.split_copy(*it, newPoint);
-				mesh.status(tempVh).set_tagged(true);
+				mesh.data(tempVh).flags.tagged = true;
 				split = true;
 				mesh.garbage_collection();
 				break;
@@ -191,6 +200,7 @@ void MyViewer::reMeshEdgeLength(double L) {
 					mesh.set_point(toVh, newPos);
 					mesh.collapse(h);
 					mesh.garbage_collection();
+
 					collapse = true;
 					break;
 				}
@@ -201,13 +211,14 @@ void MyViewer::reMeshEdgeLength(double L) {
 }
 
 void MyViewer::reMeshTagvertices() {
-	mesh.reset_status();
+	resetFlags();
 	//Tag vertices on the boundary of the 2 regions
 	for (auto v : mesh.vertices()) {
+		//mesh.status(v).set_tagged2(true);
 		if (mesh.data(v).I.size() > 0) {
 			for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
 				if (mesh.data(*vv_iter).I.size() == 0) {
-					mesh.status(v).set_tagged(true);
+					mesh.data(v).flags.tagged = true;
 					break;
 				}
 			}
@@ -219,16 +230,16 @@ void MyViewer::reMeshTagvertices() {
 	for (size_t i = 0; i < 2; i++)
 	{
 		for (auto v : mesh.vertices()) {
-			if (mesh.status(v).tagged()) {
+			if (mesh.data(v).flags.tagged) {
 				for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
-					mesh.status(*vv_iter).set_tagged2(true);
+					mesh.data(*vv_iter).flags.temporary_tagged = true;
 				}
 			}
 		}
 		for (auto v : mesh.vertices()) {
-			if (mesh.status(v).tagged2()) {
-				mesh.status(v).set_tagged2(false);
-				mesh.status(v).set_tagged(true);
+			if (mesh.data(v).flags.temporary_tagged) {
+				mesh.data(v).flags.temporary_tagged = false;
+				mesh.data(v).flags.tagged = true;
 			}
 		}
 	}
@@ -323,7 +334,7 @@ void MyViewer::reMeshVertexValences() {
 void MyViewer::reMeshVertexPositions() {
 	for (auto vh : mesh.vertices())
 	{
-		if (!mesh.status(vh).tagged() || mesh.is_boundary(vh))
+		if (!mesh.data(vh).flags.tagged || mesh.is_boundary(vh))
 			continue;
 		MyMesh::Point center = MyMesh::Point(0,0,0);
 		MyMesh::VertexVertexIter    vv_it;
@@ -343,7 +354,7 @@ bool MyViewer::checkIfEdgeTagged(MyMesh::EdgeHandle eh) {
 	return checkIfEdgeTagged(mesh.halfedge_handle(eh, 0));
 }
 bool MyViewer::checkIfEdgeTagged(MyMesh::HalfedgeHandle hh) {
-	return (mesh.status(mesh.from_vertex_handle(hh)).tagged() && mesh.status(mesh.to_vertex_handle(hh)).tagged());
+	return (mesh.data(mesh.from_vertex_handle(hh)).flags.tagged && mesh.data(mesh.to_vertex_handle(hh)).flags.tagged);
 }
 void MyViewer::reMeshSmoothing(int iterations) {
 	for (size_t i = 0; i < iterations; i++)
@@ -353,7 +364,7 @@ void MyViewer::reMeshSmoothing(int iterations) {
 }
 void MyViewer::reMeshSmoothingIteration() {
 	for (auto v : mesh.vertices()) {
-		mesh.status(v).set_tagged2(false);
+		mesh.data(v).flags.temporary_tagged = false;
 	}
 	MyMesh::VertexHandle vhPrev;
 	bool prevSet = false;
@@ -380,7 +391,8 @@ void MyViewer::reMeshSmoothingIteration() {
 				MyMesh::Point p = mesh.point(v);
 				MyMesh::Point L = 0.5 * (pNext - p) + 0.5 * (pPrev - p);
 				mesh.data(v).newPos = p + 0.5 * L;
-				mesh.status(v).set_tagged2(true);
+
+				mesh.data(v).flags.temporary_tagged = true;
 			}
 			
 		}
@@ -389,7 +401,7 @@ void MyViewer::reMeshSmoothingIteration() {
 
 	}
 	for (auto v : mesh.vertices()) {
-		if (mesh.status(v).tagged2()) {
+		if (mesh.data(v).flags.temporary_tagged) {
 			mesh.set_point(v, mesh.data(v).newPos);
 		}
 			
