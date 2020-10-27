@@ -40,12 +40,16 @@ MyViewer::MyViewer(QWidget* parent) :
 	setSelectRegionWidth(10);
 	setSelectRegionHeight(10);
 	axes.shown = false;
+
+	catmul_clark_subdivider.attach(mesh);
 }
 
 MyViewer::~MyViewer() {
 	glDeleteTextures(1, &isophote_texture);
 	glDeleteTextures(1, &environment_texture);
 	glDeleteTextures(1, &slicing_texture);
+
+	catmul_clark_subdivider.detach();
 }
 
 void MyViewer::updateMeanMinMax() {
@@ -915,6 +919,9 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			break;
 		case Qt::Key_4:
 			reMeshSmoothing(5);
+			break;
+		case Qt::Key_5:
+			quadrangulate();
 			break;
 		default:
 			QGLViewer::keyPressEvent(e);

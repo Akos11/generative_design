@@ -11,8 +11,11 @@ void MyViewer::resetFlags() {
 	}
 }
 //Generative Design
+
+/// <summary>
+/// Calculates the incidences of the input  constraint meshes and the organic part
+/// </summary>
 void MyViewer::calculateIncidence() {
-	//mesh.reset_status();
 	//reset incidence data
 	for (auto v : mesh.vertices()) {
 		mesh.data(v).I.clear();
@@ -32,8 +35,16 @@ void MyViewer::calculateIncidence() {
 	update();
 }
 
+/// <summary>
+/// Remeshing the border between the organic and incident part
+/// </summary>
+/// <param name="L">The desired edge length in teh remeshed area</param>
+/// <param name="iterations">Number of iterations of the remeeshing</param>
 void MyViewer::reMeshOrganicBoundaries(double L, int iterations) {
 	
+
+	//Calculate the average edge length
+	//Just for debugging purposes
 	double sum = 0.0;
 	int n = 0;
 	//Calculate avg edge length
@@ -63,105 +74,21 @@ void MyViewer::reMeshOrganicBoundaries(double L, int iterations) {
 
 
 }
-
+/// <summary>
+/// First step of remeshing
+/// Split the edges that are too short for the given L parameter
+/// COllapse the edges that are too long for the given L parameter
+/// </summary>
+/// <param name="L">The desired edge length</param>
 void MyViewer::reMeshEdgeLength(double L) {
-	{
-		//Split
-		//bool hasSplit = true;
-		//while (hasSplit) {
-		//	hasSplit = false;
-		//	for (MyMesh::EdgeIter it = mesh.edges_begin(); it != mesh.edges_end(); ++it) {
-		//		if (mesh.calc_edge_length(*it) > 4.0 / 5.0 * L) {
-		//			const MyViewer::MyTraits::Point& newPoint = 
-		//				(mesh.point(mesh.from_vertex_handle(mesh.halfedge_handle(*it, 0))) 
-		//					+ 
-		//				 mesh.point(mesh.to_vertex_handle(mesh.halfedge_handle(*it, 0))))
-		//				/2;
-
-		//			mesh.split(*it, newPoint);
-		//			hasSplit = true;
-		//			break;
-		//		}
-		//	}
-		//	mesh.garbage_collection();
-		//}
-
-		////Collapse
-		//bool hasCollapsed = true;
-		//while (hasCollapsed /*&& mesh.n_vertices() > 269*/) {
-		//	hasCollapsed = false;
-		//	for (MyMesh::HalfedgeIter it = mesh.halfedges_begin(); it != mesh.halfedges_end(); ++it) {
-
-		//		if (mesh.calc_edge_length(*it) < 4.0 / 3.0 * L && !mesh.status(mesh.edge_handle(*it)).deleted()) {
-		//			//qDebug() << " Before Vertex: " << mesh.to_vertex_handle(*it).idx();
-		//			//for (auto h : mesh.vih_range(mesh.to_vertex_handle(*it))) {
-		//			//	qDebug() << "FROM vertex: " << mesh.from_vertex_handle(h).idx() << " To Vertex: " << mesh.to_vertex_handle(h).idx();
-		//			//	qDebug() << h.idx();
-		//			//}
-		//			if (mesh.to_vertex_handle(*it).idx() == 146) {
-		//				MyMesh::HalfedgeHandle  h = *it;
-		//				MyMesh::HalfedgeHandle  hn = mesh.next_halfedge_handle(h);
-		//				MyMesh::HalfedgeHandle  hp = mesh.prev_halfedge_handle(h);
-
-		//				MyMesh::HalfedgeHandle  o = mesh.opposite_halfedge_handle(h);
-		//				MyMesh::HalfedgeHandle  on = mesh.next_halfedge_handle(o);
-		//				MyMesh::HalfedgeHandle  op = mesh.prev_halfedge_handle(o);
-
-		//				MyMesh::FaceHandle      fh = mesh.face_handle(h);
-		//				MyMesh::FaceHandle      fo = mesh.face_handle(o);
-
-		//				MyMesh::VertexHandle    vh = mesh.to_vertex_handle(h);
-		//				MyMesh::VertexHandle    vo = mesh.to_vertex_handle(o);
-
-		//				qDebug() << "h " << h.idx() << "hn " << hn.idx() << "hp " << hp.idx() << "vh " << vh.idx() << "vo " << vo.idx();
-		//				for (auto h : mesh.vih_range(mesh.to_vertex_handle(*it))) {
-		//					qDebug() << "FROM vertex: " << mesh.from_vertex_handle(h).idx() << " To Vertex: " << mesh.to_vertex_handle(h).idx();
-		//					qDebug() << h.idx();
-		//				}
-		//				qDebug() << "--------------------------------------TEST: " <<mesh.n_vertices();
-		//			}
-		//			MyMesh::VertexHandle fromVh = mesh.from_vertex_handle(*it);
-		//			MyMesh::VertexHandle toVh = mesh.to_vertex_handle(*it);
-		//			MyMesh::Point newPos = (mesh.point(fromVh) + mesh.point(toVh)) / 2.0f;
-		//			mesh.set_point(fromVh, newPos);
-		//			mesh.set_point(toVh, newPos);
-		//			mesh.collapse(*it);
-		//			hasCollapsed = true;
-		//			mesh.garbage_collection();
-		//			for (auto h : mesh.vih_range(mesh.to_vertex_handle(*it))) {
-		//				qDebug() << "FROM vertex: " << mesh.from_vertex_handle(h).idx() << " To Vertex: " << mesh.to_vertex_handle(h).idx();
-		//				qDebug() << h.idx();
-		//			}
-		//			//qDebug() << " Vertex: " << mesh.to_vertex_handle(*it).idx();
-		//			//for (auto h : mesh.vih_range(mesh.to_vertex_handle(*it))) {
-		//			//	qDebug() << "FROM vertex: " << mesh.from_vertex_handle(h).idx() << " To Vertex: " << mesh.to_vertex_handle(h).idx();
-		//			//	qDebug() << h.idx();
-		//			//}
-		//			qDebug() << mesh.n_vertices();
-
-		//			
-		//			
-		//			break;
-		//		}
-		//		
-		//	}
-		//	
-
-		//	mesh.garbage_collection();
-		//}
-		////mesh.garbage_collection();
-		//for (auto v : mesh.vertices()) {
-		//	qDebug() << " Vertex: " << v.idx();
-		//	for (auto h : mesh.vih_range(v)) {
-		//		qDebug() << "FROM vertex: " << mesh.from_vertex_handle(h).idx() << " To Vertex: " << mesh.to_vertex_handle(h).idx();
-		//		qDebug() << h.idx();
-		//	}
-		//}
-	}
 	bool split = true;
 	bool collapse = true;
+
+	//Splitting
 	while (split) {
 		split = false;
+		//Find one edge that needs splitting
+		//Then split the edge and start over again
 		for (MyMesh::EdgeIter it = mesh.edges_begin(); it != mesh.edges_end(); ++it) {
 			if (!checkIfEdgeTagged(it.handle()))
 				continue;
@@ -169,7 +96,6 @@ void MyViewer::reMeshEdgeLength(double L) {
 			double length = mesh.calc_edge_length(*it);
 
 			if (length > 4.0 / 3.0 * L) {
-				//qDebug() << "split";
 				const MyViewer::MyTraits::Point& newPoint =
 					(mesh.point(mesh.from_vertex_handle(mesh.halfedge_handle(*it, 0)))
 						+
@@ -183,6 +109,8 @@ void MyViewer::reMeshEdgeLength(double L) {
 			}
 		}
 	}
+	//Find one edge that needs collapsing
+	//Then collapse the edge and start over again
 	while (collapse) {
 		collapse = false;
 		for (MyMesh::EdgeIter it = mesh.edges_begin(); it != mesh.edges_end(); ++it) {
@@ -210,6 +138,9 @@ void MyViewer::reMeshEdgeLength(double L) {
 	mesh.garbage_collection();
 }
 
+/// <summary>
+/// Tag the 2 ring vertices of the ones that are on the boundary of the organic and incident regions
+/// </summary>
 void MyViewer::reMeshTagvertices() {
 	resetFlags();
 	//Tag vertices on the boundary of the 2 regions
@@ -244,6 +175,10 @@ void MyViewer::reMeshTagvertices() {
 		}
 	}
 }
+/// <summary>
+/// Second step of remeshing
+/// For every wuad pefrofm a flip if we get better valences that way
+/// </summary>
 void MyViewer::reMeshVertexValences() {
 	bool flipped = true;
 	while (flipped) {
@@ -322,6 +257,7 @@ void MyViewer::reMeshVertexValences() {
 					}
 
 				}
+				//If better then flip
 				if (squaredDifferenceFlip < squaredDifference) {
 					mesh.flip(*it);
 					flipped = true;
@@ -331,6 +267,10 @@ void MyViewer::reMeshVertexValences() {
 		}
 	}
 }
+/// <summary>
+/// Third step of remeshing
+/// For every vertex move the vertex into the avg of their neighbours projected back to the tangent plane
+/// </summary>
 void MyViewer::reMeshVertexPositions() {
 	for (auto vh : mesh.vertices())
 	{
@@ -362,6 +302,10 @@ void MyViewer::reMeshSmoothing(int iterations) {
 		reMeshSmoothingIteration();
 	}
 }
+/// <summary>
+/// Smooth the edges between the organic and incident regions
+/// This way the angle differneces will decrease
+/// </summary>
 void MyViewer::reMeshSmoothingIteration() {
 	for (auto v : mesh.vertices()) {
 		mesh.data(v).flags.temporary_tagged = false;
@@ -418,4 +362,51 @@ bool MyViewer::checkIfBetweenRegions(MyMesh::VertexHandle vh) {
 		}
 	}
 	return false;
+}
+void MyViewer::catmullClark() {
+	catmul_clark_subdivider(1);
+	updateMesh(false);
+}
+void MyViewer::quadrangulate() {
+	makeEvenTriangles();
+	makeQuadDominant();
+	makePureQuad();
+}
+/// <summary>
+/// For the quadrangulation we need an even number of triangles
+/// If their number is not equal perform a split at the longest boundary edge
+/// </summary>
+void MyViewer::makeEvenTriangles() {
+	qDebug() << mesh.n_faces();
+	if (mesh.n_faces() % 2 != 0) {
+		double longest = 0;
+		MyMesh::EdgeHandle eh;
+		for (MyMesh::EdgeIter it = mesh.edges_begin(); it != mesh.edges_end(); ++it) {
+			if (mesh.calc_edge_length(*it) > longest && mesh.is_boundary(*it)) {
+				longest = mesh.calc_edge_length(*it);
+				eh = it.handle();
+			}			
+		}
+		const MyViewer::MyTraits::Point& newPoint =
+			(mesh.point(mesh.from_vertex_handle(mesh.halfedge_handle(eh, 0)))
+				+
+				mesh.point(mesh.to_vertex_handle(mesh.halfedge_handle(eh, 0))))
+			/ 2;
+		MyMesh::VertexHandle tempVh = mesh.split_copy(eh, newPoint);
+		mesh.garbage_collection();
+		updateMesh();
+		update();
+	}
+}
+/// <summary>
+/// First step of quadrangulation
+/// make a quad dominant mesh by deleting the best edges from the triangles
+/// </summary>
+void MyViewer::makeQuadDominant() {
+	//Score edges by there "Squareness" (from dot products - angles)
+
+}
+
+void MyViewer::makePureQuad() {
+
 }

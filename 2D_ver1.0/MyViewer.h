@@ -6,6 +6,7 @@
 #include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>
 #include "ConstraintSolid.h"
 #include "CircleSolid.h"
+#include <OpenMesh/Tools/Subdivider/Uniform/CatmullClarkT.hh>
 
 
 using qglviewer::Vec;
@@ -102,6 +103,13 @@ private:
 		bool checkIfEdgeTagged(MyMesh::EdgeHandle eh);
 		bool checkIfEdgeTagged(MyMesh::HalfedgeHandle hh);
 		bool checkIfBetweenRegions(MyMesh::VertexHandle vh);
+		OpenMesh::Subdivider::Uniform::CatmullClarkT<MyMesh> catmul_clark_subdivider;
+		void catmullClark();
+		void quadrangulate();
+			void makeEvenTriangles();
+			void makeQuadDominant();
+			void makePureQuad();
+
 	//void collapse2(MyMesh::HalfedgeHandle _hh);
 	//void collapse_edge2(MyMesh::HalfedgeHandle _hh);
 	//void collapse_loop2(MyMesh::HalfedgeHandle _hh);
