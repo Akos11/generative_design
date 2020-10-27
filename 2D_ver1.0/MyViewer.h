@@ -60,6 +60,10 @@ private:
 		  OpenMesh::Vec3d newPos;
 		  Flags flags;
 		};
+		EdgeTraits{
+			double squarness;
+			bool tagged;
+		};
 	};
 	using MyMesh = OpenMesh::TriMesh_ArrayKernelT<MyTraits>;
 	using Vector = OpenMesh::VectorT<double, 3>;
@@ -108,6 +112,8 @@ private:
 		void quadrangulate();
 			void makeEvenTriangles();
 			void makeQuadDominant();
+				void calculateSquarness();
+				bool canDelete(MyMesh::EdgeHandle eh);
 			void makePureQuad();
 
 	//void collapse2(MyMesh::HalfedgeHandle _hh);
