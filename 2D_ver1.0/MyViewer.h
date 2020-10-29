@@ -8,6 +8,7 @@
 #include "ConstraintSolid.h"
 #include "CircleSolid.h"
 #include <OpenMesh/Tools/Subdivider/Uniform/CatmullClarkT.hh>
+#include <queue>
 
 
 using qglviewer::Vec;
@@ -66,6 +67,11 @@ private:
 			double squarness;
 			bool tagged;
 		};
+		FaceTraits{
+			bool tagged;
+			bool hasPrev;
+			OpenMesh::FaceHandle prevFace;
+		};
 	};
 	using MyMesh = OpenMesh::TriMesh_ArrayKernelT<MyTraits>;
 	using Vector = OpenMesh::VectorT<double, 3>;
@@ -114,14 +120,17 @@ private:
 		OpenMesh::Subdivider::Uniform::CatmullClarkT<MyMesh> catmul_clark_subdivider;
 		void catmullClark();
 		void quadrangulate();
-			void collapseObtuseTriangles();
 			void makeEvenTriangles();
 			void makeQuadDominant();
 				void calculateSquarness();
 				bool canDelete(MyMesh::EdgeHandle eh);
 				void deleteEdges();
-				void delete_edge(MyMesh::EdgeHandle _eh, bool debugData);
-			void makePureQuad();
+				void delete_edge(MyMesh::EdgeHandle _eh, bool debugData = false);
+			void makePureQuad(int idx);
+				int faceSides(MyMesh::FaceHandle fh);
+				void resetFaceFlags();
+				bool isVertexOnFace(MyMesh::VertexHandle vh, MyMesh::FaceHandle fh);
+				MyMesh::EdgeHandle getCommonEdge(MyMesh::FaceHandle fh1, MyMesh::FaceHandle fh2);
 			int counter;
 	//void collapse2(MyMesh::HalfedgeHandle _hh);
 	//void collapse_edge2(MyMesh::HalfedgeHandle _hh);

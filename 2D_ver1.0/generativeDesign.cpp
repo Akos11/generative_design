@@ -411,101 +411,7 @@ void MyViewer::catmullClark() {
 void MyViewer::quadrangulate() {
 	makeEvenTriangles();
 	makeQuadDominant();
-	makePureQuad();
-}
-
-void MyViewer::collapseObtuseTriangles() {
-	//for (MyMesh::EdgeIter it = mesh.edges_begin(); it != mesh.edges_end(); ++it) {
-	//	MyMesh::HalfedgeHandle h0 = mesh.halfedge_handle(*it, 0);
-
-
-	//	MyMesh::HalfedgeHandle h1 = mesh.opposite_halfedge_handle(h0);
-
-
-	//	MyMesh::VertexHandle v0 = mesh.from_vertex_handle(h0);
-	//	MyMesh::VertexHandle v1 = mesh.to_vertex_handle(h0);
-
-
-	//	MyMesh::VertexHandle p0 = mesh.to_vertex_handle(mesh.next_halfedge_handle(h0));
-	//	MyMesh::VertexHandle p1 = mesh.to_vertex_handle(mesh.next_halfedge_handle(h1));
-
-	//	OpenMesh::Vec3d v0v1 = (mesh.point(v0) - mesh.point(v1)).normalized();
-	//	OpenMesh::Vec3d v0p0 = (mesh.point(v1) - mesh.point(v0)).normalized();
-	//	OpenMesh::Vec3d v0p0 = (mesh.point(p0) - mesh.point(v0)).normalized();
-	//	//OpenMesh::Vec3d v1v0 = (mesh.point(v1) - mesh.point(v0)).normalized();
-
-	//	//if (dot())
-	//}
-	bool split = true;
-	while (split) {
-		split = false;
-		for (auto fh : mesh.faces())
-		{
-			MyMesh::HalfedgeHandle h0 = mesh.halfedge_handle(fh);
-			MyMesh::HalfedgeHandle h0next = mesh.next_halfedge_handle(h0);
-			MyMesh::HalfedgeHandle h0prev = mesh.prev_halfedge_handle(h0);
-
-
-			MyMesh::VertexHandle v0 = mesh.from_vertex_handle(h0);
-			MyMesh::VertexHandle v1 = mesh.to_vertex_handle(h0);
-			MyMesh::VertexHandle v2 = mesh.to_vertex_handle(h0next);
-
-
-			OpenMesh::Vec3d v0v1 = (mesh.point(v0) - mesh.point(v1)).normalized();
-			OpenMesh::Vec3d v0v2 = (mesh.point(v0) - mesh.point(v0)).normalized();
-			OpenMesh::Vec3d v1v0 = (mesh.point(v1) - mesh.point(v0)).normalized();
-			OpenMesh::Vec3d v1v2 = (mesh.point(v1) - mesh.point(v2)).normalized();
-			OpenMesh::Vec3d v2v0 = (mesh.point(v2) - mesh.point(v0)).normalized();
-			OpenMesh::Vec3d v2v1 = (mesh.point(v2) - mesh.point(v1)).normalized();
-
-			if (dot(v0v1, v0v2) < 0) {
-				MyMesh::EdgeHandle eh = mesh.edge_handle(h0next);
-				const MyViewer::MyTraits::Point& newPoint =
-					(mesh.point(v1)
-						+
-						mesh.point(v2))
-					/ 2;
-				MyMesh::VertexHandle tempVh = mesh.split_copy(eh, newPoint);
-				//mesh.flip(mesh.edge_handle(h0prev));
-
-				mesh.garbage_collection();
-				//split = true;
-				break;
-			}
-			if (dot(v1v0, v1v2) < 0) {
-				MyMesh::EdgeHandle eh = mesh.edge_handle(h0prev);
-				const MyViewer::MyTraits::Point& newPoint =
-					(mesh.point(v0)
-						+
-						mesh.point(v2))
-					/ 2;
-				MyMesh::VertexHandle tempVh = mesh.split_copy(eh, newPoint);
-				mesh.flip(mesh.edge_handle(h0));
-
-
-				mesh.garbage_collection();
-				//split = true;
-				break;
-			}
-			if (dot(v2v0, v2v1) < 0) {
-				MyMesh::EdgeHandle eh = mesh.edge_handle(h0);
-				const MyViewer::MyTraits::Point& newPoint =
-					(mesh.point(v0)
-						+
-						mesh.point(v1))
-					/ 2;
-				MyMesh::VertexHandle tempVh = mesh.split_copy(eh, newPoint);
-			//	mesh.flip(mesh.edge_handle(h0next));
-
-
-				mesh.garbage_collection();
-				//split = true;
-				break;
-			}
-		}
-	}
-	updateMesh();
-	update();
+	makePureQuad(1);
 }
 
 /// <summary>
@@ -645,61 +551,9 @@ void MyViewer::deleteEdges() {
 				MyMesh::VertexHandle p0;
 				MyMesh::VertexHandle p1;
 
-				std::vector<MyMesh::HalfedgeHandle> temphh;
-
-				for (MyMesh::FaceVertexIter fv_iter = mesh.fv_iter(f0); fv_iter.is_valid(); fv_iter++) {
-					if (fv_iter.handle() != v0 && fv_iter.handle() != v1) {
-						p0 = fv_iter.handle();
-					}
-				}
-				for (MyMesh::FaceVertexIter fv_iter = mesh.fv_iter(f1); fv_iter.is_valid(); fv_iter++) {
-					if (fv_iter.handle() != v0 && fv_iter.handle() != v1) {
-						p1 = fv_iter.handle();
-					}
-				}
-				for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(f0); fh_iter.is_valid(); fh_iter++) {
-					if (fh_iter.handle() != h0 && fh_iter.handle() != h1)
-						temphh.push_back(fh_iter.handle());
-				}
-				for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(f1); fh_iter.is_valid(); fh_iter++) {
-					if (fh_iter.handle() != h0 && fh_iter.handle() != h1)
-						temphh.push_back(fh_iter.handle());
-				}
-				//if (counter == 138) {
-				//	qDebug() << "ASD";
-					delete_edge(it.handle(),false);
-					mesh.garbage_collection();
-				//}
-				//else {
-				//	mesh.data(it.handle()).tagged = false;
-				//}
-
-
-				//qDebug() << temphh.size();
-				//std::vector<MyMesh::VertexHandle>  face_vhandles;
-				//face_vhandles.push_back(v0);
-				//face_vhandles.push_back(p1);
-				//face_vhandles.push_back(v1);
-				//face_vhandles.push_back(p0);
-				//mesh.add_face(face_vhandles);
-				//MyMesh::FaceHandle temp_fh = mesh.new_face();
-				//for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(temp_fh); fh_iter.is_valid(); fh_iter++) {
-				//	qDebug() << fh_iter.handle().idx();
-				//}
-				//qDebug() << "OGNIRONGRL";
-				//for (auto h : temphh) {
-				//	mesh.set_face_handle(h, temp_fh);
-				//	mesh.set_halfedge_handle(temp_fh, h);
-				//}
-				//for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(temp_fh); fh_iter.is_valid(); fh_iter++) {
-				//	qDebug() << fh_iter.handle().idx();
-				//}
-				//MyMesh::FaceHandle temp =  mesh.add_face(face_vhandles);
-				/*for (MyMesh::FaceVertexIter fv_iter = mesh.fv_iter(temp); fv_iter.is_valid(); fv_iter++) {
-					qDebug() << fv_iter.handle().idx();
-				}*/
+				delete_edge(it.handle(),false);
+				mesh.garbage_collection();
 				deleted = true;
-				//qDebug() <<counter++;
 				break;
 			}
 		}
@@ -725,8 +579,131 @@ bool MyViewer::canDelete(MyMesh::EdgeHandle eh) {
 	}
 	return true;
 }
-void MyViewer::makePureQuad() {
+void MyViewer::makePureQuad(int idx) {
+	int idx2 = 0;
+	for (MyMesh::FaceIter it = mesh.faces_begin(); it != mesh.faces_end(); ++it) {
+		resetFaceFlags();
+		if (faceSides(it.handle()) == 3) {
+			idx2++;
+			if (idx2 < idx) continue;
+			mesh.data(it).tagged = true;
 
+			///BFS - START
+			/// ############
+			std::queue<MyMesh::FaceHandle> prevFaces;
+			bool foundOthertriangle = false;
+			MyMesh::FaceHandle pairFace;
+
+			prevFaces.push(it.handle());
+			mesh.data(it).hasPrev = true;
+			MyMesh::FaceHandle tempFh;
+			while (prevFaces.size() > 0 &&!foundOthertriangle) {
+				tempFh = prevFaces.front();
+				prevFaces.pop();
+
+				for (MyMesh::FaceFaceIter ff_iter = mesh.ff_iter(tempFh); ff_iter.is_valid(); ff_iter++) {
+					if (!mesh.data(ff_iter).hasPrev) {
+
+						prevFaces.push(ff_iter.handle());
+						mesh.data(ff_iter).hasPrev = true;
+						mesh.data(ff_iter).prevFace = tempFh;
+
+						if (faceSides(ff_iter.handle()) == 3) {
+							foundOthertriangle = true;
+							mesh.data(ff_iter).tagged = true;
+							pairFace = ff_iter.handle();
+							break;
+						}
+					}
+				}
+				
+			}
+			///BFS - END
+			/// ############
+		
+
+			while (mesh.data(pairFace).prevFace != it.handle()) {
+				mesh.data(pairFace).tagged = true;
+				MyMesh::FaceHandle tempFace = mesh.data(pairFace).prevFace;
+				MyMesh::EdgeHandle eprev = getCommonEdge(tempFace, pairFace);
+				mesh.data(eprev).tagged = true;
+				MyMesh::EdgeHandle enext = getCommonEdge(tempFace, mesh.data(tempFace).prevFace);
+
+				MyMesh::VertexHandle vnext0 = mesh.from_vertex_handle(mesh.halfedge_handle(enext, 0));
+				MyMesh::VertexHandle vnext1 = mesh.to_vertex_handle(mesh.halfedge_handle(enext, 0));
+
+				if (!isVertexOnFace(vnext0, pairFace)) {
+					MyMesh::VertexHandle temp = vnext0;
+					vnext0 = vnext1;
+					vnext1 = temp;
+				}
+
+
+
+				MyMesh::VertexHandle vprev0;
+				MyMesh::VertexHandle vmiddle;
+
+				for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(pairFace); fh_iter.is_valid(); fh_iter++) {
+					if (mesh.from_vertex_handle(fh_iter) == vnext0 && !isVertexOnFace(mesh.to_vertex_handle(fh_iter), tempFace)) {
+						vprev0 = mesh.to_vertex_handle(fh_iter);
+						break;
+					}
+					if (mesh.to_vertex_handle(fh_iter) == vnext0 && !isVertexOnFace(mesh.from_vertex_handle(fh_iter), tempFace)) {
+						vprev0 = mesh.from_vertex_handle(fh_iter);
+						break;
+					}
+				}
+
+				for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(tempFace); fh_iter.is_valid(); fh_iter++) {
+					if (mesh.from_vertex_handle(fh_iter) == vnext1 && !isVertexOnFace(mesh.to_vertex_handle(fh_iter), pairFace)) {
+						vmiddle = mesh.to_vertex_handle(fh_iter);
+						break;
+					}
+					if (mesh.to_vertex_handle(fh_iter) == vnext1 && !isVertexOnFace(mesh.from_vertex_handle(fh_iter), pairFace)) {
+						vmiddle = mesh.from_vertex_handle(fh_iter);
+						break;
+					}
+				}
+				delete_edge(eprev,true);
+				mesh.garbage_collection();
+				updateMesh();
+				break;
+
+				pairFace = mesh.data(pairFace).prevFace;
+			}
+
+			break;
+		}
+	}
+}
+bool MyViewer::isVertexOnFace(MyMesh::VertexHandle vh, MyMesh::FaceHandle fh) {
+	for (MyMesh::FaceVertexIter fv_iter = mesh.fv_iter(fh); fv_iter.is_valid(); fv_iter++) {
+		if (fv_iter.handle() == vh)
+			return true;
+	}
+	return false;
+}
+MyViewer::MyMesh::EdgeHandle MyViewer::getCommonEdge(MyMesh::FaceHandle fh1, MyMesh::FaceHandle fh2) {
+	for (MyMesh::FaceEdgeIter fe_iter = mesh.fe_iter(fh1); fe_iter.is_valid(); fe_iter++) {
+		if (mesh.face_handle(mesh.halfedge_handle(fe_iter.handle(), 0)) == fh2 ||
+			mesh.face_handle(mesh.halfedge_handle(fe_iter.handle(), 1)) == fh2) {
+			return fe_iter.handle();
+		}
+	}
+	throw 0;
+}
+void MyViewer::resetFaceFlags() {
+	for (auto f : mesh.faces()) {
+		mesh.data(f).hasPrev = false;
+		mesh.data(f).tagged = false;
+	}
+}
+int MyViewer::faceSides(MyMesh::FaceHandle fh) {
+	int count = 0;
+	for (MyMesh::FaceVertexIter fv_iter = mesh.fv_iter(fh); fv_iter.is_valid(); fv_iter++) {
+		count++;
+	}
+	return count;
 }
 void MyViewer::delete_edge(MyMesh::EdgeHandle _eh, bool debugData) {
 	MyMesh::HalfedgeHandle h0 = mesh.halfedge_handle(_eh, 0);
@@ -743,35 +720,26 @@ void MyViewer::delete_edge(MyMesh::EdgeHandle _eh, bool debugData) {
 	MyMesh::FaceHandle f0 = mesh.face_handle(h0);
 	MyMesh::FaceHandle f1 = mesh.face_handle(h1);
 
-	MyMesh::VertexHandle p0;
-	MyMesh::VertexHandle p1;
-
-	for (MyMesh::FaceVertexIter fv_iter = mesh.fv_iter(f0); fv_iter.is_valid(); fv_iter++) {
-		if (fv_iter.handle() != v0 && fv_iter.handle() != v1) {
-			p0 = fv_iter.handle();
-		}
-	}
-
-	for (MyMesh::FaceVertexIter fv_iter = mesh.fv_iter(f1); fv_iter.is_valid(); fv_iter++) {
-		if (fv_iter.handle() != v0 && fv_iter.handle() != v1) {
-			p1 = fv_iter.handle();
-		}
-	}
-
 
 	mesh.status(f0).set_deleted(true);
 	mesh.status(h0).set_deleted(true);
 	mesh.status(h1).set_deleted(true);
 	mesh.status(_eh).set_deleted(true);
 
-
+	std::vector<MyMesh::HalfedgeHandle> temph;
+	for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(f0); fh_iter.is_valid(); fh_iter++) {
+		temph.push_back(fh_iter.handle());
+	}
 	//set face attributes
 	mesh.set_halfedge_handle(f1, h1next);
 
 	//set half_edge attributes
-	mesh.set_face_handle(h0prev, f1);
-	mesh.set_face_handle(h0next, f1);
-
+	for (auto h : temph) {
+		mesh.set_face_handle(h, f1);
+	}
+	//mesh.set_face_handle(h0prev, f1);
+	//mesh.set_face_handle(h0next, f1);
+	qDebug() << "ASD";
 	mesh.set_next_halfedge_handle(h1prev, h0next);
 	mesh.set_next_halfedge_handle(h0prev, h1next);
 
@@ -781,42 +749,4 @@ void MyViewer::delete_edge(MyMesh::EdgeHandle _eh, bool debugData) {
 	//set vertex attributes
 	mesh.set_halfedge_handle(v0, h1next);
 	mesh.set_halfedge_handle(v1, h0next);
-
-	
-	if (debugData) {
-		int count = 0;
-		for (auto v : mesh.fv_range(f1)) {
-			if (v == v0)
-				qDebug() << "v0";
-			if (v == v1)
-				qDebug() << "v1";
-			if (v == p0)
-				qDebug() << "p0";
-			if (v == p1)
-				qDebug() << "p1";
-			count++;
-		}
-		MyMesh::HalfedgeHandle temph = mesh.halfedge_handle(f1);
-
-		if (temph == h0)
-			qDebug() << "h0";
-
-		if (temph == h1)
-			qDebug() << "h1";
-
-		if (temph == h0prev)
-			qDebug() << "h0prev";
-
-		if (temph == h0next)
-			qDebug() << "h0next";
-
-		if (temph == h1prev)
-			qDebug() << "h1prev";
-
-		if (temph == h1next)
-			qDebug() << "h1next";
-		qDebug() << "count:" << count;
-	}
-
-
 }

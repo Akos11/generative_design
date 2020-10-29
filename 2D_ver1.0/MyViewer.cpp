@@ -693,12 +693,7 @@ void MyViewer::draw() {
 				glVertex3dv(mesh.point(v).data());
 				glColor3d(0.0, 0.0, 0.0);
 			}
-			if (count > 3) {
-				for (auto v : mesh.fv_range(f))
-				{
-					qDebug() << mesh.point(v)[0] << "  " <<mesh.point(v)[1] << "  " << mesh.point(v)[2];
-				}
-			}
+			
 				
 			glEnd();
 		}
@@ -764,8 +759,16 @@ void MyViewer::draw() {
 			{
 				glVertex3dv((mesh.point(v) + Vector(0.0, 0.0, 0.01)).data());		
 			}
+		else if (mesh.data(f).tagged) {
+			glColor3d(0.0, 1.0, 0.0);
+			for (auto v : mesh.fv_range(f))
+			{
+				glVertex3dv((mesh.point(v) + Vector(0.0, 0.0, 0.01)).data());
+			}
+		}
 		glEnd();
 	}
+
 
 
 }
@@ -877,7 +880,7 @@ void MyViewer::postSelection(const QPoint& p) {
 	axes.shown = true;
 	axes.selected_axis = -1;
 }
-
+int idx = 1;
 void MyViewer::keyPressEvent(QKeyEvent* e) {
 	if (e->modifiers() == Qt::NoModifier)
 		switch (e->key()) {
@@ -958,6 +961,7 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			break;
 
 		case Qt::Key_7:
+			makePureQuad(idx++);
 			//TODO - Partition
 			break;
 		default:
