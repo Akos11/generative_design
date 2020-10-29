@@ -4,6 +4,7 @@
 
 #include <QGLViewer/qglviewer.h>
 #include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>
+#include <OpenMesh/Core/Mesh/PolyMesh_ArrayKernelT.hh>
 #include "ConstraintSolid.h"
 #include "CircleSolid.h"
 #include <OpenMesh/Tools/Subdivider/Uniform/CatmullClarkT.hh>
@@ -59,6 +60,7 @@ private:
 		  std::vector<int> I;
 		  OpenMesh::Vec3d newPos;
 		  Flags flags;
+		  bool edgeTagged;
 		};
 		EdgeTraits{
 			double squarness;
@@ -95,6 +97,7 @@ private:
 
 	//generative
 		void resetFlags();
+		void resetEdgeProps();
 		void calculateIncidence();
 		//Remesh
 		void reMeshTagvertices();
@@ -114,8 +117,10 @@ private:
 			void makeQuadDominant();
 				void calculateSquarness();
 				bool canDelete(MyMesh::EdgeHandle eh);
+				void deleteEdges();
+				void delete_edge(MyMesh::EdgeHandle _eh, bool debugData);
 			void makePureQuad();
-
+			int counter;
 	//void collapse2(MyMesh::HalfedgeHandle _hh);
 	//void collapse_edge2(MyMesh::HalfedgeHandle _hh);
 	//void collapse_loop2(MyMesh::HalfedgeHandle _hh);

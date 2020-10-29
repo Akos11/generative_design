@@ -648,7 +648,9 @@ void MyViewer::draw() {
 		}
 		for (auto f : mesh.faces()) {
 			glBegin(GL_POLYGON);
+			int count = 0;
 			for (auto v : mesh.fv_range(f)) {
+				count++;
 				if (visualization == Visualization::MEAN)
 					glColor3dv(meanMapColor(mesh.data(v).mean));
 				else if (visualization == Visualization::SLICING)
@@ -658,6 +660,7 @@ void MyViewer::draw() {
 			}
 			glEnd();
 		}
+	
 		if (visualization == Visualization::ISOPHOTES) {
 			glDisable(GL_TEXTURE_GEN_S);
 			glDisable(GL_TEXTURE_GEN_T);
@@ -672,13 +675,15 @@ void MyViewer::draw() {
 	}
 
 	if (show_solid && show_wireframe) {
-		glPolygonMode(GL_FRONT, GL_LINE);
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		glColor3d(0.0, 0.0, 0.0);
 		glDisable(GL_LIGHTING);
 		for (auto f : mesh.faces()) {
 			glBegin(GL_POLYGON);
+			int count = 0;
 			for (auto v : mesh.fv_range(f))
 			{
+				count++;
 				if (mesh.data(v).flags.tagged)
 					glColor3d(1.0, 1.0, 0.0);
 				//if (mesh.is_boundary(v))
@@ -688,9 +693,28 @@ void MyViewer::draw() {
 				glVertex3dv(mesh.point(v).data());
 				glColor3d(0.0, 0.0, 0.0);
 			}
+			if (count > 3) {
+				for (auto v : mesh.fv_range(f))
+				{
+					qDebug() << mesh.point(v)[0] << "  " <<mesh.point(v)[1] << "  " << mesh.point(v)[2];
+				}
+			}
 				
 			glEnd();
 		}
+		glLineWidth(2.5);
+		for (auto e : mesh.edges()) {
+			if (mesh.data(e).tagged) {
+				glColor3d(1.0, 0.0, 0.0);
+				glBegin(GL_LINES);
+				MyMesh::HalfedgeHandle h0 = mesh.halfedge_handle(e, 0);
+
+				glVertex3dv(mesh.point(mesh.from_vertex_handle(h0)).data());
+				glVertex3dv(mesh.point(mesh.to_vertex_handle(h0)).data());
+				glEnd();
+			}
+		}
+		glLineWidth(1.0);
 		glEnable(GL_LIGHTING);
 	}
 
@@ -726,7 +750,7 @@ void MyViewer::draw() {
 	}
 
 	glColor3d(1.0, 0.0, 0.0);
-	glBegin(GL_TRIANGLES);
+
 	for (auto f : mesh.faces()) {
 		bool yellow = true;
 		for (auto v : mesh.fv_range(f))
@@ -734,13 +758,15 @@ void MyViewer::draw() {
 			if (mesh.data(v).I.size() == 0)
 				yellow = false;
 		}
+		glBegin(GL_POLYGON);
 		if (yellow)
 			for (auto v : mesh.fv_range(f))
 			{
 				glVertex3dv((mesh.point(v) + Vector(0.0, 0.0, 0.01)).data());		
 			}
+		glEnd();
 	}
-	glEnd();
+
 
 }
 
@@ -921,7 +947,11 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			reMeshSmoothing(5);
 			break;
 		case Qt::Key_5:
+			//catmullClark();
 			quadrangulate();
+			break;
+		case Qt::Key_6:
+			deleteEdges();
 			break;
 		default:
 			QGLViewer::keyPressEvent(e);
