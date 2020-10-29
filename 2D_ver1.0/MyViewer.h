@@ -100,7 +100,8 @@ private:
 		void resetEdgeProps();
 		void calculateIncidence();
 		//Remesh
-		void reMeshTagvertices();
+		void reMeshTagvertices(bool all = false);
+		void reMeshAll(int iterations);
 		void reMeshOrganicBoundaries(double L, int iterations);
 		void reMeshEdgeLength(double L);
 		void reMeshVertexValences();
@@ -113,6 +114,7 @@ private:
 		OpenMesh::Subdivider::Uniform::CatmullClarkT<MyMesh> catmul_clark_subdivider;
 		void catmullClark();
 		void quadrangulate();
+			void collapseObtuseTriangles();
 			void makeEvenTriangles();
 			void makeQuadDominant();
 				void calculateSquarness();

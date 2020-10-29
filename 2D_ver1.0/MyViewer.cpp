@@ -933,9 +933,12 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			fairMesh();
 			update();
 			break;
-		case Qt::Key_1:
+		case Qt::Key_0:
 			show_constraints = !show_constraints;
 			update();
+			break;
+		case Qt::Key_1:
+			reMeshAll(5);
 			break;
 		case Qt::Key_2:
 			calculateIncidence();
@@ -947,11 +950,15 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			reMeshSmoothing(5);
 			break;
 		case Qt::Key_5:
+			//TODO - CUT the organic part
+			break;
+		case Qt::Key_6:
 			//catmullClark();
 			quadrangulate();
 			break;
-		case Qt::Key_6:
-			deleteEdges();
+
+		case Qt::Key_7:
+			//TODO - Partition
 			break;
 		default:
 			QGLViewer::keyPressEvent(e);

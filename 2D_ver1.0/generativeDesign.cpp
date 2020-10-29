@@ -42,7 +42,31 @@ void MyViewer::calculateIncidence() {
 	updateMesh();
 	update();
 }
+void MyViewer::reMeshAll(int iterations) {
+	//Calculate the average edge length
+	double sum = 0.0;
+	int n = 0;
+	//Calculate avg edge length
+	for (MyMesh::EdgeIter it = mesh.edges_begin(); it != mesh.edges_end(); ++it) {
+		sum += mesh.calc_edge_length(*it);
+		n++;
+	}
+	double L = sum / n;
 
+	//Do the given iteration number of remeshing
+	for (size_t i = 0; i < iterations; i++)
+	{
+		reMeshTagvertices(true);
+		reMeshEdgeLength(L);
+		reMeshVertexValences();
+		updateMesh();
+		reMeshVertexPositions();
+	}
+
+	resetFlags();
+	updateMesh();
+	update();
+}
 /// <summary>
 /// Remeshing the border between the organic and incident part
 /// </summary>
@@ -151,36 +175,43 @@ void MyViewer::reMeshEdgeLength(double L) {
 /// <summary>
 /// Tag the 2 ring vertices of the ones that are on the boundary of the organic and incident regions
 /// </summary>
-void MyViewer::reMeshTagvertices() {
+void MyViewer::reMeshTagvertices(bool all) {
 	resetFlags();
-	//Tag vertices on the boundary of the 2 regions
-	for (auto v : mesh.vertices()) {
-		//mesh.status(v).set_tagged2(true);
-		if (mesh.data(v).I.size() > 0) {
-			for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
-				if (mesh.data(*vv_iter).I.size() == 0) {
-					mesh.data(v).flags.tagged = true;
-					break;
-				}
-			}
-
+	if (all) {
+		for (auto v : mesh.vertices()) {
+			mesh.data(v).flags.tagged = true;
 		}
-
 	}
-	//Tag the 2 ring neighbours of the previously tagged vertices
-	for (size_t i = 0; i < 2; i++)
-	{
+	else {
+		//Tag vertices on the boundary of the 2 regions
 		for (auto v : mesh.vertices()) {
-			if (mesh.data(v).flags.tagged) {
+			//mesh.status(v).set_tagged2(true);
+			if (mesh.data(v).I.size() > 0) {
 				for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
-					mesh.data(*vv_iter).flags.temporary_tagged = true;
+					if (mesh.data(*vv_iter).I.size() == 0) {
+						mesh.data(v).flags.tagged = true;
+						break;
+					}
+				}
+
+			}
+
+		}
+		//Tag the 2 ring neighbours of the previously tagged vertices
+		for (size_t i = 0; i < 2; i++)
+		{
+			for (auto v : mesh.vertices()) {
+				if (mesh.data(v).flags.tagged) {
+					for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
+						mesh.data(*vv_iter).flags.temporary_tagged = true;
+					}
 				}
 			}
-		}
-		for (auto v : mesh.vertices()) {
-			if (mesh.data(v).flags.temporary_tagged) {
-				mesh.data(v).flags.temporary_tagged = false;
-				mesh.data(v).flags.tagged = true;
+			for (auto v : mesh.vertices()) {
+				if (mesh.data(v).flags.temporary_tagged) {
+					mesh.data(v).flags.temporary_tagged = false;
+					mesh.data(v).flags.tagged = true;
+				}
 			}
 		}
 	}
@@ -382,6 +413,101 @@ void MyViewer::quadrangulate() {
 	makeQuadDominant();
 	makePureQuad();
 }
+
+void MyViewer::collapseObtuseTriangles() {
+	//for (MyMesh::EdgeIter it = mesh.edges_begin(); it != mesh.edges_end(); ++it) {
+	//	MyMesh::HalfedgeHandle h0 = mesh.halfedge_handle(*it, 0);
+
+
+	//	MyMesh::HalfedgeHandle h1 = mesh.opposite_halfedge_handle(h0);
+
+
+	//	MyMesh::VertexHandle v0 = mesh.from_vertex_handle(h0);
+	//	MyMesh::VertexHandle v1 = mesh.to_vertex_handle(h0);
+
+
+	//	MyMesh::VertexHandle p0 = mesh.to_vertex_handle(mesh.next_halfedge_handle(h0));
+	//	MyMesh::VertexHandle p1 = mesh.to_vertex_handle(mesh.next_halfedge_handle(h1));
+
+	//	OpenMesh::Vec3d v0v1 = (mesh.point(v0) - mesh.point(v1)).normalized();
+	//	OpenMesh::Vec3d v0p0 = (mesh.point(v1) - mesh.point(v0)).normalized();
+	//	OpenMesh::Vec3d v0p0 = (mesh.point(p0) - mesh.point(v0)).normalized();
+	//	//OpenMesh::Vec3d v1v0 = (mesh.point(v1) - mesh.point(v0)).normalized();
+
+	//	//if (dot())
+	//}
+	bool split = true;
+	while (split) {
+		split = false;
+		for (auto fh : mesh.faces())
+		{
+			MyMesh::HalfedgeHandle h0 = mesh.halfedge_handle(fh);
+			MyMesh::HalfedgeHandle h0next = mesh.next_halfedge_handle(h0);
+			MyMesh::HalfedgeHandle h0prev = mesh.prev_halfedge_handle(h0);
+
+
+			MyMesh::VertexHandle v0 = mesh.from_vertex_handle(h0);
+			MyMesh::VertexHandle v1 = mesh.to_vertex_handle(h0);
+			MyMesh::VertexHandle v2 = mesh.to_vertex_handle(h0next);
+
+
+			OpenMesh::Vec3d v0v1 = (mesh.point(v0) - mesh.point(v1)).normalized();
+			OpenMesh::Vec3d v0v2 = (mesh.point(v0) - mesh.point(v0)).normalized();
+			OpenMesh::Vec3d v1v0 = (mesh.point(v1) - mesh.point(v0)).normalized();
+			OpenMesh::Vec3d v1v2 = (mesh.point(v1) - mesh.point(v2)).normalized();
+			OpenMesh::Vec3d v2v0 = (mesh.point(v2) - mesh.point(v0)).normalized();
+			OpenMesh::Vec3d v2v1 = (mesh.point(v2) - mesh.point(v1)).normalized();
+
+			if (dot(v0v1, v0v2) < 0) {
+				MyMesh::EdgeHandle eh = mesh.edge_handle(h0next);
+				const MyViewer::MyTraits::Point& newPoint =
+					(mesh.point(v1)
+						+
+						mesh.point(v2))
+					/ 2;
+				MyMesh::VertexHandle tempVh = mesh.split_copy(eh, newPoint);
+				//mesh.flip(mesh.edge_handle(h0prev));
+
+				mesh.garbage_collection();
+				//split = true;
+				break;
+			}
+			if (dot(v1v0, v1v2) < 0) {
+				MyMesh::EdgeHandle eh = mesh.edge_handle(h0prev);
+				const MyViewer::MyTraits::Point& newPoint =
+					(mesh.point(v0)
+						+
+						mesh.point(v2))
+					/ 2;
+				MyMesh::VertexHandle tempVh = mesh.split_copy(eh, newPoint);
+				mesh.flip(mesh.edge_handle(h0));
+
+
+				mesh.garbage_collection();
+				//split = true;
+				break;
+			}
+			if (dot(v2v0, v2v1) < 0) {
+				MyMesh::EdgeHandle eh = mesh.edge_handle(h0);
+				const MyViewer::MyTraits::Point& newPoint =
+					(mesh.point(v0)
+						+
+						mesh.point(v1))
+					/ 2;
+				MyMesh::VertexHandle tempVh = mesh.split_copy(eh, newPoint);
+			//	mesh.flip(mesh.edge_handle(h0next));
+
+
+				mesh.garbage_collection();
+				//split = true;
+				break;
+			}
+		}
+	}
+	updateMesh();
+	update();
+}
+
 /// <summary>
 /// For the quadrangulation we need an even number of triangles
 /// If their number is not equal perform a split at the longest boundary edge
@@ -453,7 +579,12 @@ void MyViewer::calculateSquarness() {
 		OpenMesh::Vec3d p1v0 = (mesh.point(v0) - mesh.point(p1)).normalized();
 		OpenMesh::Vec3d p1v1 = (mesh.point(v1) - mesh.point(p1)).normalized();
 
-		double temp = abs(dot(p0v0, p0v1)) + abs(dot(p1v0, p1v1));
+		OpenMesh::Vec3d v0p0 = (mesh.point(p0) - mesh.point(v0)).normalized();
+		OpenMesh::Vec3d v0p1 = (mesh.point(p1) - mesh.point(v0)).normalized();
+		OpenMesh::Vec3d v1p0 = (mesh.point(p0) - mesh.point(v1)).normalized();
+		OpenMesh::Vec3d v1p1 = (mesh.point(p1) - mesh.point(v1)).normalized();
+
+		double temp = abs(dot(p0v0, p0v1)) + abs(dot(p1v0, p1v1)) + abs(dot(v0p0, v0p1)) + abs(dot(v1p0, v1p1));
 		mesh.data(it.handle()).squarness = temp;
 
 		bool inserted = false;
@@ -492,7 +623,7 @@ void MyViewer::calculateSquarness() {
 	}
 	qDebug() << "Deleted " << count;
 	counter = 0;
-	//deleteEdges(edges);
+	deleteEdges();
 }
 void MyViewer::deleteEdges() {
 
