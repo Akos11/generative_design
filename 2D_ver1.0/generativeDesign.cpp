@@ -411,7 +411,29 @@ void MyViewer::catmullClark() {
 void MyViewer::quadrangulate() {
 	makeEvenTriangles();
 	makeQuadDominant();
-	makePureQuad(1);
+	int sum4 = 0;
+	int sum3 = 0;
+	for (auto f : mesh.faces())
+	{
+		if (faceSides(f) == 4)
+			sum4++;
+		if (faceSides(f) == 3)
+			sum3++;
+
+	}
+	qDebug() << "Before 3side: " << sum3 << " 4 side: " << sum4;
+	makePureQuad(190);
+	sum4 = 0;
+	sum3 = 0;
+	for (auto f : mesh.faces())
+	{
+		if (faceSides(f) == 4)
+			sum4++;
+		if (faceSides(f) == 3)
+			sum3++;
+
+	}
+	qDebug() << "After 3side:" << sum3 << " 4 side: " << sum4;
 }
 
 /// <summary>
@@ -551,7 +573,7 @@ void MyViewer::deleteEdges() {
 				MyMesh::VertexHandle p0;
 				MyMesh::VertexHandle p1;
 
-				delete_edge(it.handle(),false);
+				delete_edge(it.handle());
 				mesh.garbage_collection();
 				deleted = true;
 				break;
@@ -581,13 +603,14 @@ bool MyViewer::canDelete(MyMesh::EdgeHandle eh) {
 }
 void MyViewer::makePureQuad(int idx) {
 	int idx2 = 0;
+	int idx3 = 0;
+	//int count = 0;
 	for (MyMesh::FaceIter it = mesh.faces_begin(); it != mesh.faces_end(); ++it) {
 		resetFaceFlags();
 		if (faceSides(it.handle()) == 3) {
-			idx2++;
-			if (idx2 < idx) continue;
-			mesh.data(it).tagged = true;
-
+			//idx2++;
+			//if (++idx2 < idx) continue;
+			//mesh.data(it).tagged2 = true;
 			///BFS - START
 			/// ############
 			std::queue<MyMesh::FaceHandle> prevFaces;
@@ -610,7 +633,7 @@ void MyViewer::makePureQuad(int idx) {
 
 						if (faceSides(ff_iter.handle()) == 3) {
 							foundOthertriangle = true;
-							mesh.data(ff_iter).tagged = true;
+							//mesh.data(ff_iter).tagged2 = true;
 							pairFace = ff_iter.handle();
 							break;
 						}
@@ -620,60 +643,97 @@ void MyViewer::makePureQuad(int idx) {
 			}
 			///BFS - END
 			/// ############
-		
+			if (it.handle().idx() == 1388 || it.handle().idx() == 1417) {
+				mesh.data(it).tagged2 = true;
+				continue;
 
+			}
 			while (mesh.data(pairFace).prevFace != it.handle()) {
+
 				mesh.data(pairFace).tagged = true;
 				MyMesh::FaceHandle tempFace = mesh.data(pairFace).prevFace;
 				MyMesh::EdgeHandle eprev = getCommonEdge(tempFace, pairFace);
 				mesh.data(eprev).tagged = true;
 				MyMesh::EdgeHandle enext = getCommonEdge(tempFace, mesh.data(tempFace).prevFace);
 
-				MyMesh::VertexHandle vnext0 = mesh.from_vertex_handle(mesh.halfedge_handle(enext, 0));
-				MyMesh::VertexHandle vnext1 = mesh.to_vertex_handle(mesh.halfedge_handle(enext, 0));
-
-				if (!isVertexOnFace(vnext0, pairFace)) {
-					MyMesh::VertexHandle temp = vnext0;
-					vnext0 = vnext1;
-					vnext1 = temp;
+				MyMesh::VertexHandle vprev0, vprev1, vprev2, vmiddle0, vmiddle1, vnext;
+				vprev0 = mesh.from_vertex_handle(mesh.halfedge_handle(eprev, 0));
+				vprev1 = mesh.from_vertex_handle(mesh.halfedge_handle(eprev, 1));
+				if (!isVertexOnFace(vprev0, mesh.data(tempFace).prevFace)) {
+					MyMesh::VertexHandle temp = vprev0;
+					vprev0 = vprev1;
+					vprev1 = temp;
 				}
-
-
-
-				MyMesh::VertexHandle vprev0;
-				MyMesh::VertexHandle vmiddle;
-
-				for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(pairFace); fh_iter.is_valid(); fh_iter++) {
-					if (mesh.from_vertex_handle(fh_iter) == vnext0 && !isVertexOnFace(mesh.to_vertex_handle(fh_iter), tempFace)) {
-						vprev0 = mesh.to_vertex_handle(fh_iter);
-						break;
-					}
-					if (mesh.to_vertex_handle(fh_iter) == vnext0 && !isVertexOnFace(mesh.from_vertex_handle(fh_iter), tempFace)) {
-						vprev0 = mesh.from_vertex_handle(fh_iter);
-						break;
-					}
+				for (MyMesh::FaceVertexIter fv_iter = mesh.fv_iter(pairFace); fv_iter.is_valid(); fv_iter++) {
+					if (fv_iter.handle() != vprev0 && fv_iter.handle() != vprev1)
+						vprev2 = fv_iter.handle();
 				}
-
 				for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(tempFace); fh_iter.is_valid(); fh_iter++) {
-					if (mesh.from_vertex_handle(fh_iter) == vnext1 && !isVertexOnFace(mesh.to_vertex_handle(fh_iter), pairFace)) {
-						vmiddle = mesh.to_vertex_handle(fh_iter);
-						break;
+					if (mesh.from_vertex_handle(fh_iter) == vprev0 && mesh.to_vertex_handle(fh_iter)   != vprev1) {
+						vmiddle0 = mesh.to_vertex_handle(fh_iter);
 					}
-					if (mesh.to_vertex_handle(fh_iter) == vnext1 && !isVertexOnFace(mesh.from_vertex_handle(fh_iter), pairFace)) {
-						vmiddle = mesh.from_vertex_handle(fh_iter);
-						break;
+					if (mesh.to_vertex_handle(fh_iter) == vprev0 && mesh.from_vertex_handle(fh_iter) != vprev1) {
+						vmiddle0 = mesh.from_vertex_handle(fh_iter);
+					}
+					if (mesh.from_vertex_handle(fh_iter) == vprev1 && mesh.to_vertex_handle(fh_iter) != vprev0) {
+						vmiddle1 = mesh.to_vertex_handle(fh_iter);
+					}
+					if (mesh.to_vertex_handle(fh_iter) == vprev1 && mesh.from_vertex_handle(fh_iter) != vprev0) {
+						vmiddle1 = mesh.from_vertex_handle(fh_iter);
 					}
 				}
-				delete_edge(eprev,true);
-				mesh.garbage_collection();
-				updateMesh();
-				break;
+				for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(mesh.data(tempFace).prevFace); fh_iter.is_valid(); fh_iter++) {
+					if (mesh.from_vertex_handle(fh_iter) == vmiddle0 && mesh.to_vertex_handle(fh_iter) != vmiddle1 && mesh.to_vertex_handle(fh_iter) != vprev0) {
+						vnext = mesh.to_vertex_handle(fh_iter);
+					}
+					if (mesh.to_vertex_handle(fh_iter) == vmiddle0 && mesh.from_vertex_handle(fh_iter) != vmiddle1 && mesh.from_vertex_handle(fh_iter) != vprev0) {
+						vnext = mesh.from_vertex_handle(fh_iter);
+					}
+				}
 
-				pairFace = mesh.data(pairFace).prevFace;
+				MyMesh::FaceHandle nextPrevFace = mesh.data(tempFace).prevFace;
+				bool opposite = !hasCommonVertex(pairFace, nextPrevFace);
+				MyMesh::FaceHandle newFace = delete_edge(eprev);
+			
+
+				mesh.data(newFace).prevFace = nextPrevFace;
+
+				if (!opposite) {
+					std::vector<MyMesh::VertexHandle> temp = { vprev2, vprev0, vnext, vmiddle0 };
+					std::vector<MyMesh::VertexHandle> temp2 = { vmiddle1, vprev0, vnext, vmiddle0 };
+					MyMesh::FaceHandle tempFace;
+					if (getAngleSum(temp) > getAngleSum(temp2))
+						tempFace = add_edge(newFace, vmiddle0, vprev2);
+					else
+						tempFace = add_edge(newFace, vprev0, vmiddle1);
+					mesh.data(tempFace).prevFace = nextPrevFace;
+					pairFace = tempFace;
+
+				}
+				else {
+						
+					resetFlags();
+					
+
+					tempFace = add_edge(newFace, vmiddle0, vprev1);
+
+					mesh.data(tempFace).prevFace = nextPrevFace;
+					pairFace = tempFace;
+				}
+
+				updateMesh();
+
 			}
 
-			break;
+			MyMesh::FaceHandle tempFace = mesh.data(pairFace).prevFace;
+			MyMesh::EdgeHandle eprev = getCommonEdge(tempFace, pairFace);
+			MyMesh::FaceHandle temporary = delete_edge(eprev);
+			//mesh.data(temporary).tagged2 = true;
+			mesh.garbage_collection();
+			updateMesh();
+			//break;
 		}
+
 	}
 }
 bool MyViewer::isVertexOnFace(MyMesh::VertexHandle vh, MyMesh::FaceHandle fh) {
@@ -692,10 +752,104 @@ MyViewer::MyMesh::EdgeHandle MyViewer::getCommonEdge(MyMesh::FaceHandle fh1, MyM
 	}
 	throw 0;
 }
+bool MyViewer::hasCommonVertex(MyMesh::FaceHandle fh1, MyMesh::FaceHandle fh2) {
+	for (MyMesh::FaceVertexIter fv_iter = mesh.fv_iter(fh1); fv_iter.is_valid(); fv_iter++) {
+		if (isVertexOnFace(fv_iter.handle(), fh2))
+			return true;
+	}
+	return false;
+}
+bool MyViewer::hasCommonEdge(MyMesh::VertexHandle vh1, MyMesh::VertexHandle vh2) {
+	for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(vh1); vv_iter.is_valid(); vv_iter++) {
+		if (vv_iter.handle() == vh2)
+			return true;
+	}
+	return false;
+}
+MyViewer::MyMesh::EdgeHandle MyViewer::getCommonEdge(MyMesh::VertexHandle vh1, MyMesh::VertexHandle vh2) {
+	for (MyMesh::VertexIHalfedgeIter vih_iter = mesh.vih_iter(vh1); vih_iter.is_valid(); vih_iter++) {
+		if (mesh.to_vertex_handle(vih_iter.handle()) == vh2 || mesh.from_vertex_handle(vih_iter.handle()) == vh2)
+			return mesh.edge_handle(vih_iter.handle());
+	}
+	throw;
+}
+double MyViewer::getAngleSum(MyMesh::FaceHandle fh) {
+	double angle = 0;
+	for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(fh); fh_iter.is_valid(); fh_iter++) {
+		MyMesh::Point vec1 = -(mesh.point(mesh.to_vertex_handle(fh_iter)) - mesh.point(mesh.from_vertex_handle(fh_iter))).normalized();
+		MyMesh::HalfedgeHandle temph = mesh.next_halfedge_handle(fh_iter.handle());
+		MyMesh::Point vec2 = (mesh.point(mesh.to_vertex_handle(temph)) - mesh.point(mesh.from_vertex_handle(temph))).normalized();
+
+		angle += acos(dot(vec1, vec2));
+	}
+	return angle;
+}
+double MyViewer::getAngleSum(std::vector<MyMesh::VertexHandle> vertices) {
+	double angle = 0;
+	vertices.push_back(vertices[0]);
+	vertices.push_back(vertices[1]);
+
+	for (size_t i = 0; i < vertices.size() - 2; i++)
+	{
+		MyMesh::Point vec1 = -(mesh.point(vertices[i]) - mesh.point(vertices[i+1])).normalized();
+		MyMesh::Point vec2 = (mesh.point(vertices[i + 1]) - mesh.point(vertices[i + 2])).normalized();
+		angle += acos(dot(vec1, vec2));
+	}
+
+	return angle;
+}
+MyViewer::MyMesh::FaceHandle MyViewer::add_edge(MyMesh::FaceHandle fh, MyMesh::VertexHandle vh0, MyMesh::VertexHandle vh1) {
+	std::vector<MyMesh::VertexHandle> fv1;
+	std::vector<MyMesh::VertexHandle> fv2;
+
+	MyMesh::HalfedgeHandle he;
+	for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(fh); fh_iter.is_valid(); fh_iter++) {
+		if (mesh.from_vertex_handle(fh_iter) == vh0)
+			he = fh_iter.handle();
+		//mesh.data(mesh.edge_handle(fh_iter.handle())).tagged = true;
+	}
+
+	MyMesh::VertexHandle vh = vh0;
+	int idx = 0;
+	while (vh != vh1) {
+		fv1.push_back(vh);
+		vh = mesh.to_vertex_handle(he);
+		he = mesh.next_halfedge_handle(he);
+	}
+	fv1.push_back(vh);
+
+	while (vh != vh0) {
+		fv2.push_back(vh);
+		vh = mesh.to_vertex_handle(he);
+		he = mesh.next_halfedge_handle(he);
+	}
+	fv2.push_back(vh);
+	mesh.delete_face(fh,false);
+	MyMesh::FaceHandle newFace1 = mesh.add_face(fv1);
+	MyMesh::FaceHandle newFace2 = mesh.add_face(fv2);
+
+	if (fv1.size() == 4) {
+		if (hasCommonEdge(fv1[0], fv1[2]))
+			delete_edge(getCommonEdge(fv1[0], fv1[2]));
+		if (hasCommonEdge(fv1[1], fv1[3]))
+			delete_edge(getCommonEdge(fv1[1], fv1[3]));
+		return newFace2;
+	}
+	if (fv2.size() == 4) {
+		if (hasCommonEdge(fv2[0], fv2[2]))
+			delete_edge(getCommonEdge(fv2[0], fv2[2]));
+		if (hasCommonEdge(fv2[1], fv2[3]))
+			delete_edge(getCommonEdge(fv2[1], fv2[3]));
+		return newFace1;
+	}
+	return fh;
+	
+}
 void MyViewer::resetFaceFlags() {
 	for (auto f : mesh.faces()) {
 		mesh.data(f).hasPrev = false;
 		mesh.data(f).tagged = false;
+		//mesh.data(f).tagged2 = false;
 	}
 }
 int MyViewer::faceSides(MyMesh::FaceHandle fh) {
@@ -705,7 +859,7 @@ int MyViewer::faceSides(MyMesh::FaceHandle fh) {
 	}
 	return count;
 }
-void MyViewer::delete_edge(MyMesh::EdgeHandle _eh, bool debugData) {
+MyViewer::MyMesh::FaceHandle MyViewer::delete_edge(MyMesh::EdgeHandle _eh) {
 	MyMesh::HalfedgeHandle h0 = mesh.halfedge_handle(_eh, 0);
 	MyMesh::HalfedgeHandle h1 = mesh.opposite_halfedge_handle(h0);
 
@@ -721,15 +875,17 @@ void MyViewer::delete_edge(MyMesh::EdgeHandle _eh, bool debugData) {
 	MyMesh::FaceHandle f1 = mesh.face_handle(h1);
 
 
+	
+
+	std::vector<MyMesh::HalfedgeHandle> temph;
+	for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(f0); fh_iter.is_valid(); fh_iter++) {
+		if (fh_iter.handle() != h0)
+			temph.push_back(fh_iter.handle());
+	}
 	mesh.status(f0).set_deleted(true);
 	mesh.status(h0).set_deleted(true);
 	mesh.status(h1).set_deleted(true);
 	mesh.status(_eh).set_deleted(true);
-
-	std::vector<MyMesh::HalfedgeHandle> temph;
-	for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(f0); fh_iter.is_valid(); fh_iter++) {
-		temph.push_back(fh_iter.handle());
-	}
 	//set face attributes
 	mesh.set_halfedge_handle(f1, h1next);
 
@@ -739,7 +895,7 @@ void MyViewer::delete_edge(MyMesh::EdgeHandle _eh, bool debugData) {
 	}
 	//mesh.set_face_handle(h0prev, f1);
 	//mesh.set_face_handle(h0next, f1);
-	qDebug() << "ASD";
+	//qDebug() << "ASD";
 	mesh.set_next_halfedge_handle(h1prev, h0next);
 	mesh.set_next_halfedge_handle(h0prev, h1next);
 
@@ -749,4 +905,102 @@ void MyViewer::delete_edge(MyMesh::EdgeHandle _eh, bool debugData) {
 	//set vertex attributes
 	mesh.set_halfedge_handle(v0, h1next);
 	mesh.set_halfedge_handle(v1, h0next);
+
+	return f1;
+}
+
+void MyViewer::partition() {
+	resetFlags();
+	resetEdgeProps();
+	for (auto e : mesh.edges()) {
+		if (mesh.is_boundary(e)) {
+			mesh.data(e).tagged = true;
+
+		}
+	}
+	for (auto v : mesh.vertices()) {
+		mesh.data(v).I.clear();
+		if (mesh.valence(v) != 4 && !mesh.is_boundary(v)) {
+			mesh.data(v).flags.tagged = true;
+			for (MyMesh::VertexEdgeIter ve_iter = mesh.ve_iter(v); ve_iter.is_valid(); ve_iter++) {
+				mesh.data(ve_iter).tagged = true;
+				if (mesh.from_vertex_handle(mesh.halfedge_handle(ve_iter, 0)) != v &&
+					!mesh.is_boundary(mesh.from_vertex_handle(mesh.halfedge_handle(ve_iter, 0))))
+					mesh.data(mesh.from_vertex_handle(mesh.halfedge_handle(ve_iter, 0))).flags.temporary_tagged = true;
+				if (mesh.from_vertex_handle(mesh.halfedge_handle(ve_iter, 1)) != v &&
+					!mesh.is_boundary(mesh.from_vertex_handle(mesh.halfedge_handle(ve_iter, 1))))
+					mesh.data(mesh.from_vertex_handle(mesh.halfedge_handle(ve_iter, 1))).flags.temporary_tagged = true;
+
+			}
+		}
+	}
+	int idx = 0;
+	bool finish = false;
+	while (!finish) {
+		finish = true;
+		for (auto v : mesh.vertices()) {
+			if (mesh.data(v).flags.temporary_tagged && !mesh.data(v).flags.tagged) {
+				std::vector<MyMesh::EdgeHandle>edges;
+				for (MyMesh::VertexEdgeIter ve_iter = mesh.ve_iter(v); ve_iter.is_valid(); ve_iter++) {
+					edges.push_back(ve_iter.handle());
+				}
+				if (mesh.data(edges[0]).tagged && !mesh.data(edges[2]).tagged &&
+					!(mesh.data(edges[1]).tagged && mesh.data(edges[3]).tagged)) {
+					mesh.data(edges[2]).tagged = true;
+					if (!mesh.is_boundary(mesh.from_vertex_handle(mesh.halfedge_handle(edges[2], 0))))
+						mesh.data(mesh.from_vertex_handle(mesh.halfedge_handle(edges[2], 0))).flags.temporary_tagged2 = true;
+					if (!mesh.is_boundary(mesh.from_vertex_handle(mesh.halfedge_handle(edges[2], 1))))
+						mesh.data(mesh.from_vertex_handle(mesh.halfedge_handle(edges[2], 1))).flags.temporary_tagged2 = true;
+					mesh.data(v).flags.temporary_tagged2 = false;
+					continue;
+				}
+				if (mesh.data(edges[2]).tagged && !mesh.data(edges[0]).tagged &&
+					!(mesh.data(edges[1]).tagged && mesh.data(edges[3]).tagged)) {
+					mesh.data(edges[0]).tagged = true;
+					if (!mesh.is_boundary(mesh.from_vertex_handle(mesh.halfedge_handle(edges[0], 0))))
+						mesh.data(mesh.from_vertex_handle(mesh.halfedge_handle(edges[0], 0))).flags.temporary_tagged2 = true;
+					if (!mesh.is_boundary(mesh.from_vertex_handle(mesh.halfedge_handle(edges[0], 1))))
+						mesh.data(mesh.from_vertex_handle(mesh.halfedge_handle(edges[0], 1))).flags.temporary_tagged2 = true;
+					mesh.data(v).flags.temporary_tagged2 = false;
+					continue;
+
+				}
+				if (mesh.data(edges[1]).tagged && !mesh.data(edges[3]).tagged &&
+					!(mesh.data(edges[0]).tagged && mesh.data(edges[2]).tagged)) {
+					mesh.data(edges[3]).tagged = true;
+					if (!mesh.is_boundary(mesh.from_vertex_handle(mesh.halfedge_handle(edges[3], 0))))
+						mesh.data(mesh.from_vertex_handle(mesh.halfedge_handle(edges[3], 0))).flags.temporary_tagged2 = true;
+					if (!mesh.is_boundary(mesh.from_vertex_handle(mesh.halfedge_handle(edges[3], 1))))
+						mesh.data(mesh.from_vertex_handle(mesh.halfedge_handle(edges[3], 1))).flags.temporary_tagged2 = true;
+					mesh.data(v).flags.temporary_tagged2 = false;
+					continue;
+
+				}
+				if (mesh.data(edges[3]).tagged && !mesh.data(edges[1]).tagged &&
+					!(mesh.data(edges[0]).tagged && mesh.data(edges[2]).tagged)) {
+					mesh.data(edges[1]).tagged = true;
+					if (!mesh.is_boundary(mesh.from_vertex_handle(mesh.halfedge_handle(edges[1], 0))))
+						mesh.data(mesh.from_vertex_handle(mesh.halfedge_handle(edges[1], 0))).flags.temporary_tagged2 = true;
+					if (!mesh.is_boundary(mesh.from_vertex_handle(mesh.halfedge_handle(edges[1], 1))))
+						mesh.data(mesh.from_vertex_handle(mesh.halfedge_handle(edges[1], 1))).flags.temporary_tagged2 = true;
+					mesh.data(v).flags.temporary_tagged2 = false;
+					continue;
+
+				}
+			}
+		}
+		int count = 0;
+		for (auto v : mesh.vertices()) {
+			mesh.data(v).flags.temporary_tagged = false;
+			if (mesh.data(v).flags.temporary_tagged2) {
+				mesh.data(v).flags.temporary_tagged = true;
+				mesh.data(v).flags.temporary_tagged2 = false;
+				finish = false;
+				count++;
+			}
+		}
+		qDebug() << count;
+	}
+	updateMesh();
+	update();
 }

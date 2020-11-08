@@ -52,6 +52,7 @@ private:
 	struct Flags {
 		bool tagged;
 		bool temporary_tagged;
+		bool temporary_tagged2;
 	};
 	struct MyTraits : public OpenMesh::DefaultTraits {
 		using Point = OpenMesh::Vec3d; // the default would be Vec3f
@@ -69,6 +70,7 @@ private:
 		};
 		FaceTraits{
 			bool tagged;
+			bool tagged2;
 			bool hasPrev;
 			OpenMesh::FaceHandle prevFace;
 		};
@@ -125,12 +127,19 @@ private:
 				void calculateSquarness();
 				bool canDelete(MyMesh::EdgeHandle eh);
 				void deleteEdges();
-				void delete_edge(MyMesh::EdgeHandle _eh, bool debugData = false);
+				MyMesh::FaceHandle delete_edge(MyMesh::EdgeHandle _eh);
+				MyMesh::FaceHandle add_edge(MyMesh::FaceHandle fh, MyMesh::VertexHandle vh0, MyMesh::VertexHandle vh1);
 			void makePureQuad(int idx);
 				int faceSides(MyMesh::FaceHandle fh);
 				void resetFaceFlags();
 				bool isVertexOnFace(MyMesh::VertexHandle vh, MyMesh::FaceHandle fh);
+				bool hasCommonVertex(MyMesh::FaceHandle fh1, MyMesh::FaceHandle fh2);
+				bool hasCommonEdge(MyMesh::VertexHandle vh1, MyMesh::VertexHandle vh2);
+				MyMesh::EdgeHandle getCommonEdge(MyMesh::VertexHandle vh1, MyMesh::VertexHandle vh2);
 				MyMesh::EdgeHandle getCommonEdge(MyMesh::FaceHandle fh1, MyMesh::FaceHandle fh2);
+				double getAngleSum(MyMesh::FaceHandle fh);
+				double getAngleSum(std::vector<MyMesh::VertexHandle> vertices);
+		void partition();
 			int counter;
 	//void collapse2(MyMesh::HalfedgeHandle _hh);
 	//void collapse_edge2(MyMesh::HalfedgeHandle _hh);

@@ -646,10 +646,13 @@ void MyViewer::draw() {
 			glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL);
 			glEnable(GL_TEXTURE_1D);
 		}
+		
 		for (auto f : mesh.faces()) {
+			//int i = 0;
 			glBegin(GL_POLYGON);
 			int count = 0;
 			for (auto v : mesh.fv_range(f)) {
+				//qDebug() << "Test" << i++;
 				count++;
 				if (visualization == Visualization::MEAN)
 					glColor3dv(meanMapColor(mesh.data(v).mean));
@@ -675,6 +678,7 @@ void MyViewer::draw() {
 	}
 
 	if (show_solid && show_wireframe) {
+
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		glColor3d(0.0, 0.0, 0.0);
 		glDisable(GL_LIGHTING);
@@ -697,7 +701,7 @@ void MyViewer::draw() {
 				
 			glEnd();
 		}
-		glLineWidth(2.5);
+		glLineWidth(5.5);
 		for (auto e : mesh.edges()) {
 			if (mesh.data(e).tagged) {
 				glColor3d(1.0, 0.0, 0.0);
@@ -759,16 +763,36 @@ void MyViewer::draw() {
 			{
 				glVertex3dv((mesh.point(v) + Vector(0.0, 0.0, 0.01)).data());		
 			}
-		else if (mesh.data(f).tagged) {
+		else if (mesh.data(f).tagged2) {
 			glColor3d(0.0, 1.0, 0.0);
 			for (auto v : mesh.fv_range(f))
 			{
 				glVertex3dv((mesh.point(v) + Vector(0.0, 0.0, 0.01)).data());
 			}
+			glColor3d(1.0, 0.0, 0.0);
 		}
 		glEnd();
 	}
+	glLineWidth(2.5);
+	glPointSize(8.0);
+	glBegin(GL_POINTS);
+	for (auto v : mesh.vertices()) {
 
+		if (mesh.data(v).flags.tagged)
+			glVertex3dv((mesh.point(v) + Vector(0.0, 0.0, 0.01)).data());
+		
+		/*else if (mesh.data(f).tagged) {
+			glColor3d(0.0, 1.0, 0.0);
+			for (auto v : mesh.fv_range(f))
+			{
+				glVertex3dv((mesh.point(v) + Vector(0.0, 0.0, 0.01)).data());
+			}
+		}*/
+
+	}
+	glEnd();
+	glPointSize(1.0);
+	glLineWidth(1.0);
 
 
 }
@@ -961,8 +985,7 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			break;
 
 		case Qt::Key_7:
-			makePureQuad(idx++);
-			//TODO - Partition
+			partition();
 			break;
 		default:
 			QGLViewer::keyPressEvent(e);
