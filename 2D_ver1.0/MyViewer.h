@@ -119,6 +119,7 @@ private:
 		bool checkIfEdgeTagged(MyMesh::EdgeHandle eh);
 		bool checkIfEdgeTagged(MyMesh::HalfedgeHandle hh);
 		bool checkIfBetweenRegions(MyMesh::VertexHandle vh);
+		void removeIncidentVertices();
 		OpenMesh::Subdivider::Uniform::CatmullClarkT<MyMesh> catmul_clark_subdivider;
 		void catmullClark();
 		void quadrangulate();
@@ -139,6 +140,13 @@ private:
 				MyMesh::EdgeHandle getCommonEdge(MyMesh::FaceHandle fh1, MyMesh::FaceHandle fh2);
 				double getAngleSum(MyMesh::FaceHandle fh);
 				double getAngleSum(std::vector<MyMesh::VertexHandle> vertices);
+			void smoothQuadMesh(int iterations = 5);
+		void quadRegularization(int iterations = 5);
+			void printUnregularVertices();
+			void quadRegularizationRemove2ValenceVertices();
+			void quadRegularizationSwapping();
+			void quadRegularizationCollapsing();
+			void quadRegularizationSplitting();
 		void partition();
 			int counter;
 	//void collapse2(MyMesh::HalfedgeHandle _hh);

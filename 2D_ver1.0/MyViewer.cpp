@@ -977,15 +977,28 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			reMeshSmoothing(5);
 			break;
 		case Qt::Key_5:
-			//TODO - CUT the organic part
+			removeIncidentVertices();
 			break;
 		case Qt::Key_6:
 			//catmullClark();
 			quadrangulate();
+
 			break;
 
 		case Qt::Key_7:
+			quadRegularization();
+			//smoothQuadMesh();
+			break;
+
+		case Qt::Key_8:
+			smoothQuadMesh();
+			update();
+			//partition();
+			break;
+		case Qt::Key_9:
+
 			partition();
+			update();
 			break;
 		default:
 			QGLViewer::keyPressEvent(e);

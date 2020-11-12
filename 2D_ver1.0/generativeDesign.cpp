@@ -51,7 +51,7 @@ void MyViewer::reMeshAll(int iterations) {
 		sum += mesh.calc_edge_length(*it);
 		n++;
 	}
-	double L = sum / n;
+	double L = (sum / n);
 
 	//Do the given iteration number of remeshing
 	for (size_t i = 0; i < iterations; i++)
@@ -404,6 +404,20 @@ bool MyViewer::checkIfBetweenRegions(MyMesh::VertexHandle vh) {
 	}
 	return false;
 }
+void MyViewer::removeIncidentVertices(){
+	resetFlags();
+	for (auto v : mesh.vertices()) {
+		if (mesh.data(v).I.size() > 0 && !checkIfBetweenRegions(v))
+			mesh.data(v).flags.tagged = true;
+	}
+	for (auto v : mesh.vertices()) {
+		if (mesh.data(v).flags.tagged)
+			mesh.delete_vertex(v);
+	}
+	mesh.garbage_collection();
+	updateMesh();
+	update();
+}
 void MyViewer::catmullClark() {
 	catmul_clark_subdivider(1);
 	updateMesh(false);
@@ -643,11 +657,11 @@ void MyViewer::makePureQuad(int idx) {
 			}
 			///BFS - END
 			/// ############
-			if (it.handle().idx() == 1388 || it.handle().idx() == 1417) {
-				mesh.data(it).tagged2 = true;
-				continue;
+			//if (it.handle().idx() == 1388 || it.handle().idx() == 1417) {
+			//	mesh.data(it).tagged2 = true;
+			//	continue;
 
-			}
+			//}
 			while (mesh.data(pairFace).prevFace != it.handle()) {
 
 				mesh.data(pairFace).tagged = true;
@@ -828,21 +842,22 @@ MyViewer::MyMesh::FaceHandle MyViewer::add_edge(MyMesh::FaceHandle fh, MyMesh::V
 	MyMesh::FaceHandle newFace1 = mesh.add_face(fv1);
 	MyMesh::FaceHandle newFace2 = mesh.add_face(fv2);
 
+	MyMesh::FaceHandle returnHandlee;
 	if (fv1.size() == 4) {
 		if (hasCommonEdge(fv1[0], fv1[2]))
 			delete_edge(getCommonEdge(fv1[0], fv1[2]));
 		if (hasCommonEdge(fv1[1], fv1[3]))
 			delete_edge(getCommonEdge(fv1[1], fv1[3]));
-		return newFace2;
+		returnHandlee = newFace2;
 	}
 	if (fv2.size() == 4) {
 		if (hasCommonEdge(fv2[0], fv2[2]))
 			delete_edge(getCommonEdge(fv2[0], fv2[2]));
 		if (hasCommonEdge(fv2[1], fv2[3]))
 			delete_edge(getCommonEdge(fv2[1], fv2[3]));
-		return newFace1;
+		returnHandlee = newFace1;
 	}
-	return fh;
+	return returnHandlee;
 	
 }
 void MyViewer::resetFaceFlags() {
@@ -906,9 +921,287 @@ MyViewer::MyMesh::FaceHandle MyViewer::delete_edge(MyMesh::EdgeHandle _eh) {
 	mesh.set_halfedge_handle(v0, h1next);
 	mesh.set_halfedge_handle(v1, h0next);
 
+	mesh.adjust_outgoing_halfedge(v0);
+	mesh.adjust_outgoing_halfedge(v1);
+
+
 	return f1;
 }
+void MyViewer::printUnregularVertices() {
+	int countRegular = 0;
+	int countUnregular = 0;
+	for (auto v : mesh.vertices()) {
+		if (mesh.valence(v) == 4) {
+			countRegular++;
+		}
+		else
+		{
+			countUnregular++;
+		}
+	}
+	qDebug() << "---Regular vertices: " << countRegular;
+	qDebug() << "---Unregular vertices: " << countUnregular;
 
+}
+void MyViewer::quadRegularization(int iterations) {
+	for (size_t i = 0; i < iterations; i++)
+	{
+
+		printUnregularVertices();
+		qDebug() << "Remove2ValenceVertices";
+		quadRegularizationRemove2ValenceVertices();
+		printUnregularVertices();
+		qDebug() << "quadRegularizationSwapping";
+		quadRegularizationSwapping();
+		printUnregularVertices();
+		qDebug() << "quadRegularizationCollapsing";
+		quadRegularizationCollapsing();
+		printUnregularVertices();
+		qDebug() << "quadRegularizationSplitting";
+		quadRegularizationSplitting();
+		printUnregularVertices();
+
+		updateMesh();
+	}
+	for (auto v : mesh.vertices()) {
+		if ( mesh.valence(v) != 4)
+			mesh.data(v).flags.tagged = true;
+		else
+			mesh.data(v).flags.tagged = false;
+
+	}
+	update();
+}
+void MyViewer::quadRegularizationRemove2ValenceVertices() {
+	int count = 1;
+
+	int count2 = 0;
+	while (count2 < count) {
+		count = 0;
+		count2 = 0;
+		for (auto v : mesh.vertices())
+			if (mesh.valence(v) == 2)
+				count++;
+		for (auto v : mesh.vertices()) {
+			if (mesh.valence(v) == 2 && !mesh.is_boundary(v)) {
+
+				MyMesh::HalfedgeHandle h = mesh.halfedge_handle(v);
+				MyMesh::EdgeHandle e = mesh.edge_handle(mesh.next_halfedge_handle(h));
+
+
+				MyMesh::HalfedgeHandle h2 = mesh.opposite_halfedge_handle(h);
+				if (!mesh.is_boundary(e)) {
+					mesh.data(e).tagged = true;
+					MyMesh::VertexHandle v2 = mesh.from_vertex_handle(mesh.prev_halfedge_handle(mesh.opposite_halfedge_handle(mesh.next_halfedge_handle(h))));
+					MyMesh::FaceHandle f = delete_edge(e);
+
+
+					add_edge(f, v, v2);
+
+				}
+				else {
+					MyMesh::EdgeHandle e = mesh.edge_handle(mesh.next_halfedge_handle(mesh.next_halfedge_handle(h)));
+					if (!mesh.is_boundary(e)) {
+						//mesh.data(e).tagged = true;
+						MyMesh::VertexHandle v2 = mesh.to_vertex_handle(mesh.next_halfedge_handle(mesh.opposite_halfedge_handle(mesh.next_halfedge_handle(mesh.next_halfedge_handle(h)))));
+						MyMesh::FaceHandle f = delete_edge(e);
+
+
+						add_edge(f, v, v2);
+					}
+					else {
+						MyMesh::EdgeHandle e = mesh.edge_handle(mesh.next_halfedge_handle(mesh.next_halfedge_handle(mesh.opposite_halfedge_handle(h))));
+						if (!mesh.is_boundary(e)) {
+							mesh.data(e).tagged = true;
+
+							MyMesh::VertexHandle v2 = mesh.from_vertex_handle(mesh.prev_halfedge_handle(mesh.opposite_halfedge_handle(mesh.next_halfedge_handle(mesh.next_halfedge_handle(mesh.opposite_halfedge_handle(h))))));
+
+							MyMesh::FaceHandle f = delete_edge(e);						
+
+							add_edge(f, v, v2);
+
+						}
+						else {
+							MyMesh::EdgeHandle e = mesh.edge_handle(mesh.prev_halfedge_handle(mesh.opposite_halfedge_handle(h)));
+							if (!mesh.is_boundary(e)) {
+								mesh.data(e).tagged = true;
+								MyMesh::VertexHandle v2 = mesh.to_vertex_handle(mesh.next_halfedge_handle(mesh.opposite_halfedge_handle(mesh.prev_halfedge_handle(mesh.opposite_halfedge_handle(h)))));
+								MyMesh::FaceHandle f = delete_edge(e);
+
+
+								add_edge(f, v, v2);
+							}
+							else
+								qDebug() << "Cant delete";
+						}
+					}
+
+				}
+
+			}
+		}
+		mesh.garbage_collection();
+		for (auto v : mesh.vertices())
+			if (mesh.valence(v) == 2)
+				count2++;
+	}
+
+
+	for (auto v : mesh.vertices()) {
+		if (mesh.valence(v) == 2)
+			mesh.data(v).flags.tagged = true;
+		else
+			mesh.data(v).flags.tagged = false;
+	}
+}
+void MyViewer::quadRegularizationSwapping() {
+	for (MyMesh::EdgeIter it = mesh.edges_begin(); it != mesh.edges_end(); ++it) {
+		MyMesh::VertexHandle v1 = mesh.from_vertex_handle(mesh.halfedge_handle(it, 0));
+		MyMesh::VertexHandle v2 = mesh.from_vertex_handle(mesh.halfedge_handle(it, 1));
+
+		if (mesh.valence(v1) == 5 && mesh.valence(v2) == 5) {
+			MyMesh::VertexHandle v11 = mesh.to_vertex_handle(mesh.next_halfedge_handle(mesh.halfedge_handle(it, 0)));
+			MyMesh::VertexHandle v12 = mesh.to_vertex_handle(mesh.next_halfedge_handle(mesh.halfedge_handle(it, 1)));
+
+			MyMesh::VertexHandle v21 = mesh.from_vertex_handle(mesh.prev_halfedge_handle(mesh.halfedge_handle(it, 0)));
+			MyMesh::VertexHandle v22 = mesh.from_vertex_handle(mesh.prev_halfedge_handle(mesh.halfedge_handle(it, 1)));
+
+			if (mesh.valence(v11) == 3 && mesh.valence(v12) == 3) {
+				MyMesh::FaceHandle tempf= delete_edge(it.handle());
+				add_edge(tempf,v11, v12);
+			}
+			else if (mesh.valence(v21) == 3 && mesh.valence(v22) == 3) {
+				MyMesh::FaceHandle tempf = delete_edge(it.handle());
+				add_edge(tempf, v21, v22);
+			}
+			else if ((mesh.valence(v11) == 3 && mesh.valence(v12) == 4) || (mesh.valence(v11) == 4 && mesh.valence(v12) == 3)) {
+				MyMesh::FaceHandle tempf = delete_edge(it.handle());
+				add_edge(tempf, v11, v12);
+			}
+			else if ((mesh.valence(v21) == 3 && mesh.valence(v22) == 4) || (mesh.valence(v21) == 4 && mesh.valence(v22) == 3)) {
+				MyMesh::FaceHandle tempf = delete_edge(it.handle());
+				add_edge(tempf, v21, v22);
+			}
+
+		}
+	}
+	mesh.garbage_collection();
+}
+void MyViewer::quadRegularizationCollapsing() {
+	bool collapse = true;
+	while (collapse) {
+		collapse = false;
+		for (MyMesh::FaceIter it = mesh.faces_begin(); it != mesh.faces_end(); ++it) {
+			std::vector<MyMesh::VertexHandle> vertices;
+			for (MyMesh::FaceVertexIter fv_iter = mesh.fv_iter(it); fv_iter.is_valid(); fv_iter++)
+			{
+				vertices.push_back(fv_iter.handle());
+			}
+			if (mesh.valence(vertices[0]) == 5 && mesh.valence(vertices[2]) == 5 && mesh.valence(vertices[1]) == 3 && mesh.valence(vertices[3]) == 3) {
+				MyMesh::FaceHandle f = add_edge(it.handle(), vertices[1], vertices[3]);
+				for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(it); fh_iter.is_valid(); fh_iter++) {
+					if ((mesh.from_vertex_handle(fh_iter) == vertices[1] && mesh.to_vertex_handle(fh_iter) == vertices[3]) ||
+						(mesh.from_vertex_handle(fh_iter) == vertices[3] && mesh.to_vertex_handle(fh_iter) == vertices[1])) {
+						mesh.collapse(fh_iter);
+						//mesh.data(mesh.edge_handle(fh_iter)).tagged = true;
+						break;
+					}
+				}
+				collapse = true;
+				mesh.garbage_collection();
+				break;
+			}
+			else if (mesh.valence(vertices[1]) == 5 && mesh.valence(vertices[3]) == 5 && mesh.valence(vertices[0]) == 3 && mesh.valence(vertices[2]) == 3) {
+				MyMesh::FaceHandle f = add_edge(it.handle(), vertices[0], vertices[2]);
+				for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(it); fh_iter.is_valid(); fh_iter++) {
+					if ((mesh.from_vertex_handle(fh_iter) == vertices[0] && mesh.to_vertex_handle(fh_iter) == vertices[2]) ||
+						(mesh.from_vertex_handle(fh_iter) == vertices[2] && mesh.to_vertex_handle(fh_iter) == vertices[0])) {
+						mesh.collapse(fh_iter);
+						//mesh.data(mesh.edge_handle(fh_iter)).tagged = true;
+
+						break;
+					}
+				}
+				collapse = true;
+				mesh.garbage_collection();
+				break;
+			}
+			else if (mesh.valence(vertices[1]) == 5 && mesh.valence(vertices[3]) == 5 &&
+				(mesh.valence(vertices[0]) == 3 && mesh.valence(vertices[2]) == 4 || mesh.valence(vertices[0]) == 4 && mesh.valence(vertices[2]) == 3)) {
+				MyMesh::FaceHandle f = add_edge(it.handle(), vertices[0], vertices[2]);
+				for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(it); fh_iter.is_valid(); fh_iter++) {
+					if ((mesh.from_vertex_handle(fh_iter) == vertices[2] && mesh.to_vertex_handle(fh_iter) == vertices[0]) ||
+						(mesh.from_vertex_handle(fh_iter) == vertices[0] && mesh.to_vertex_handle(fh_iter) == vertices[2])) {
+						mesh.collapse(fh_iter);
+						//mesh.data(mesh.edge_handle(fh_iter)).tagged = true;
+
+						break;
+					}
+				}
+				collapse = true;
+				mesh.garbage_collection();
+				break;
+			}
+			else if (mesh.valence(vertices[0]) == 5 && mesh.valence(vertices[2]) == 5 &&
+				(mesh.valence(vertices[1]) == 3 && mesh.valence(vertices[3]) == 4 || mesh.valence(vertices[1]) == 4 && mesh.valence(vertices[3]) == 3)) {
+				MyMesh::FaceHandle f = add_edge(it.handle(), vertices[1], vertices[3]);
+				for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(it); fh_iter.is_valid(); fh_iter++) {
+					if ((mesh.from_vertex_handle(fh_iter) == vertices[1] && mesh.to_vertex_handle(fh_iter) == vertices[3]) ||
+						(mesh.from_vertex_handle(fh_iter) == vertices[3] && mesh.to_vertex_handle(fh_iter) == vertices[1])) {
+						mesh.collapse(fh_iter);
+						//mesh.data(mesh.edge_handle(fh_iter)).tagged = true;
+
+						break;
+					}
+				}
+				collapse = true;
+				mesh.garbage_collection();
+				break;
+			}
+		}
+	}
+}
+void MyViewer::quadRegularizationSplitting() {
+	for (auto v : mesh.vertices()) {
+		if (mesh.valence(v) > 4) {
+			int lowValenceCount = 0;
+			MyMesh::VertexHandle vl;
+			MyMesh::VertexHandle vr;
+			int edgeBetween = 0;
+			for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
+				if (mesh.valence(vv_iter) < 4) {
+					if (lowValenceCount == 0) {
+						vl = vv_iter.handle();
+						edgeBetween = 0;
+					}
+
+					if (lowValenceCount == 1) {
+						vr = vv_iter.handle();
+						/*if (edgeBetween == 1) {
+							MyMesh::VertexHandle temp = vr;
+							vr = vl;
+							vl = temp;
+						}*/
+					}
+					lowValenceCount++;
+
+				}
+				edgeBetween++;
+			}
+			if (lowValenceCount >= 2) {
+				MyMesh::Point p = mesh.point(v);
+				mesh.set_point(v, (mesh.point(v) + mesh.point(vl) + mesh.point(vr)) / 3);
+				MyMesh::HalfedgeHandle temph = mesh.vertex_split(p, v, vl, vr);
+				delete_edge(mesh.edge_handle(temph));
+				mesh.garbage_collection();
+
+			
+			}
+				
+		}
+			
+	}
+}
 void MyViewer::partition() {
 	resetFlags();
 	resetEdgeProps();
@@ -1003,4 +1296,37 @@ void MyViewer::partition() {
 	}
 	updateMesh();
 	update();
+}
+
+void MyViewer::smoothQuadMesh(int iterations) {
+	for (size_t i = 0; i < iterations; i++)
+	{
+		for (auto v : mesh.vertices()) {
+			if (mesh.is_boundary(v)) {
+				//mesh.data(v).flags.tagged = true;
+				mesh.data(v).newPos = mesh.point(v);
+			}
+			//else
+			//	mesh.data(v).flags.tagged = false;
+
+		}
+		OpenMesh::Smoother::JacobiLaplaceSmootherT<MyMesh> smoother(mesh);
+		smoother.initialize(OpenMesh::Smoother::SmootherT<MyMesh>::Tangential_and_Normal, // or: Tangential_and_Normal
+			OpenMesh::Smoother::SmootherT<MyMesh>::C1);
+		for (size_t i = 1; i <= 10; ++i) {
+			smoother.smooth(10);
+		}
+
+		updateMesh(false);
+		for (auto v : mesh.vertices()) {
+			if (mesh.is_boundary(v))
+				mesh.set_point(v, mesh.data(v).newPos);
+			mesh.data(v).flags.tagged = true;
+		}
+		reMeshVertexPositions();
+		for (auto v : mesh.vertices()) {
+			mesh.data(v).flags.tagged = false;
+		}
+		updateMesh(false);
+	}
 }
