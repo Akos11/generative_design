@@ -1102,7 +1102,11 @@ void MyViewer::quadRegularizationCollapsing() {
 				for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(it); fh_iter.is_valid(); fh_iter++) {
 					if ((mesh.from_vertex_handle(fh_iter) == vertices[1] && mesh.to_vertex_handle(fh_iter) == vertices[3]) ||
 						(mesh.from_vertex_handle(fh_iter) == vertices[3] && mesh.to_vertex_handle(fh_iter) == vertices[1])) {
-						mesh.collapse(fh_iter);
+						MyMesh::HalfedgeHandle he = fh_iter;
+						if (mesh.is_boundary(mesh.from_vertex_handle(fh_iter))) {
+							he = mesh.opposite_halfedge_handle(he);
+						}
+						mesh.collapse(he);
 						//mesh.data(mesh.edge_handle(fh_iter)).tagged = true;
 						break;
 					}
@@ -1116,7 +1120,11 @@ void MyViewer::quadRegularizationCollapsing() {
 				for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(it); fh_iter.is_valid(); fh_iter++) {
 					if ((mesh.from_vertex_handle(fh_iter) == vertices[0] && mesh.to_vertex_handle(fh_iter) == vertices[2]) ||
 						(mesh.from_vertex_handle(fh_iter) == vertices[2] && mesh.to_vertex_handle(fh_iter) == vertices[0])) {
-						mesh.collapse(fh_iter);
+						MyMesh::HalfedgeHandle he = fh_iter;
+						if (mesh.is_boundary(mesh.from_vertex_handle(fh_iter))) {
+							he = mesh.opposite_halfedge_handle(he);
+						}
+						mesh.collapse(he);
 						//mesh.data(mesh.edge_handle(fh_iter)).tagged = true;
 
 						break;
@@ -1132,7 +1140,11 @@ void MyViewer::quadRegularizationCollapsing() {
 				for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(it); fh_iter.is_valid(); fh_iter++) {
 					if ((mesh.from_vertex_handle(fh_iter) == vertices[2] && mesh.to_vertex_handle(fh_iter) == vertices[0]) ||
 						(mesh.from_vertex_handle(fh_iter) == vertices[0] && mesh.to_vertex_handle(fh_iter) == vertices[2])) {
-						mesh.collapse(fh_iter);
+						MyMesh::HalfedgeHandle he = fh_iter;
+						if (mesh.is_boundary(mesh.from_vertex_handle(fh_iter))) {
+							he = mesh.opposite_halfedge_handle(he);
+						}
+						mesh.collapse(he);
 						//mesh.data(mesh.edge_handle(fh_iter)).tagged = true;
 
 						break;
@@ -1148,7 +1160,11 @@ void MyViewer::quadRegularizationCollapsing() {
 				for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(it); fh_iter.is_valid(); fh_iter++) {
 					if ((mesh.from_vertex_handle(fh_iter) == vertices[1] && mesh.to_vertex_handle(fh_iter) == vertices[3]) ||
 						(mesh.from_vertex_handle(fh_iter) == vertices[3] && mesh.to_vertex_handle(fh_iter) == vertices[1])) {
-						mesh.collapse(fh_iter);
+						MyMesh::HalfedgeHandle he = fh_iter;
+						if (mesh.is_boundary(mesh.from_vertex_handle(fh_iter))) {
+							he = mesh.opposite_halfedge_handle(he);
+						}
+						mesh.collapse(he);
 						//mesh.data(mesh.edge_handle(fh_iter)).tagged = true;
 
 						break;
@@ -1303,7 +1319,7 @@ void MyViewer::smoothQuadMesh(int iterations) {
 	{
 		for (auto v : mesh.vertices()) {
 			if (mesh.is_boundary(v)) {
-				//mesh.data(v).flags.tagged = true;
+			//	mesh.data(v).flags.tagged = true;
 				mesh.data(v).newPos = mesh.point(v);
 			}
 			//else
