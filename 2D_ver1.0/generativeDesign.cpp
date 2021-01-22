@@ -3,6 +3,7 @@
 #include <iostream>
 
 
+
 void MyViewer::resetFlags() {
 	for (auto v : mesh.vertices()) {
 		mesh.data(v).flags.tagged = false;
@@ -17,6 +18,44 @@ void MyViewer::resetEdgeProps() {
 		mesh.data(e).tagged = false;
 
 	}
+}
+
+
+void MyViewer::decimate() {
+	//Calculate the average edge length
+	double sum = 0.0;
+	int n = 0;
+	//Calculate avg edge length
+	for (MyMesh::EdgeIter it = mesh.edges_begin(); it != mesh.edges_end(); ++it) {
+		sum += mesh.calc_edge_length(*it);
+		n++;
+	}
+	double L = (sum / n) * 2;
+	// Get an iterator over all halfedges
+	MyMesh::HalfedgeIter he_it, he_end = mesh.halfedges_end();
+	// If halfedge is boundary, lock the corresponding vertices
+	for (he_it = mesh.halfedges_begin(); he_it != he_end; ++he_it)
+		if (mesh.is_boundary(*he_it)) {
+			mesh.status(mesh.to_vertex_handle(*he_it)).set_locked(true);
+			mesh.status(mesh.from_vertex_handle(*he_it)).set_locked(true);
+		}
+	for (auto v : mesh.vertices()) {
+		if (mesh.status(v).locked()) {
+			int count = 0;
+			for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
+
+				if (mesh.status(*vv_iter).locked() && mesh.calc_edge_length(getCommonEdge(v, *vv_iter)) < L)
+					count++;
+			}
+			if (count > 1)
+				mesh.status(v).set_locked(false);
+		}
+	}
+	OpenMesh::Decimater::DecimaterT<MyMesh> decimater(mesh);
+	OpenMesh::Decimater::ModRoundnessT<MyMesh>::Handle mod;
+	decimater.add(mod);
+	decimater.initialize();
+	decimater.decimate_to_faces(150);
 }
 //Generative Design
 
@@ -52,7 +91,7 @@ void MyViewer::reMeshAll(int iterations) {
 		n++;
 	}
 	double L = (sum / n);
-
+	MyMesh::HalfedgeIter he_it, he_end = mesh.halfedges_end();
 	//Do the given iteration number of remeshing
 	for (size_t i = 0; i < iterations; i++)
 	{
@@ -60,7 +99,7 @@ void MyViewer::reMeshAll(int iterations) {
 		reMeshEdgeLength(L);
 		reMeshVertexValences();
 		updateMesh();
-		reMeshVertexPositions();
+		reMeshVertexPositions(false);
 	}
 
 	resetFlags();
@@ -151,10 +190,12 @@ void MyViewer::reMeshEdgeLength(double L) {
 			if (!checkIfEdgeTagged(it.handle()))
 				continue;
 			double length = mesh.calc_edge_length(*it);
-			if (length < 4.0 / 5.0 * L && !mesh.is_boundary(*it)) {
-				MyMesh::HalfedgeHandle h = mesh.halfedge_handle(*it, 0);
-				MyMesh::VertexHandle fromVh = mesh.from_vertex_handle(h);
-				MyMesh::VertexHandle toVh = mesh.to_vertex_handle(h);
+			MyMesh::HalfedgeHandle h = mesh.halfedge_handle(*it, 0);
+			MyMesh::VertexHandle fromVh = mesh.from_vertex_handle(h);
+			MyMesh::VertexHandle toVh = mesh.to_vertex_handle(h);
+
+			if (length < 4.0 / 5.0 * L && (!mesh.is_boundary(*it)||!mesh.data(fromVh).flags.locked)) {
+
 
 				if (mesh.is_collapse_ok(h) && !mesh.status(h).deleted() && !mesh.is_boundary(fromVh) && !mesh.is_boundary(toVh)) {
 					MyMesh::Point newPos = (mesh.point(fromVh) + mesh.point(toVh)) / 2.0f;
@@ -312,10 +353,10 @@ void MyViewer::reMeshVertexValences() {
 /// Third step of remeshing
 /// For every vertex move the vertex into the avg of their neighbours projected back to the tangent plane
 /// </summary>
-void MyViewer::reMeshVertexPositions() {
+void MyViewer::reMeshVertexPositions(bool remeshUnlockedBoundaries) {
 	for (auto vh : mesh.vertices())
 	{
-		if (!mesh.data(vh).flags.tagged || mesh.is_boundary(vh))
+		if (!mesh.data(vh).flags.tagged || (mesh.is_boundary(vh) && (!remeshUnlockedBoundaries || mesh.data(vh).flags.locked)))
 			continue;
 		MyMesh::Point center = MyMesh::Point(0,0,0);
 		MyMesh::VertexVertexIter    vv_it;
@@ -780,11 +821,19 @@ bool MyViewer::hasCommonEdge(MyMesh::VertexHandle vh1, MyMesh::VertexHandle vh2)
 	}
 	return false;
 }
+bool MyViewer::hasCommonFace(MyMesh::VertexHandle vh1, MyMesh::VertexHandle vh2) {
+	for (MyMesh::VertexFaceIter vf_iter = mesh.vf_iter(vh1); vf_iter.is_valid(); vf_iter++) {
+		if (isVertexOnFace(vh2, vf_iter.handle()))
+			return true;
+	}
+	return false;
+}
 MyViewer::MyMesh::EdgeHandle MyViewer::getCommonEdge(MyMesh::VertexHandle vh1, MyMesh::VertexHandle vh2) {
 	for (MyMesh::VertexIHalfedgeIter vih_iter = mesh.vih_iter(vh1); vih_iter.is_valid(); vih_iter++) {
 		if (mesh.to_vertex_handle(vih_iter.handle()) == vh2 || mesh.from_vertex_handle(vih_iter.handle()) == vh2)
 			return mesh.edge_handle(vih_iter.handle());
 	}
+
 	throw;
 }
 double MyViewer::getAngleSum(MyMesh::FaceHandle fh) {
@@ -842,7 +891,7 @@ MyViewer::MyMesh::FaceHandle MyViewer::add_edge(MyMesh::FaceHandle fh, MyMesh::V
 	MyMesh::FaceHandle newFace1 = mesh.add_face(fv1);
 	MyMesh::FaceHandle newFace2 = mesh.add_face(fv2);
 
-	MyMesh::FaceHandle returnHandlee;
+	MyMesh::FaceHandle returnHandlee = newFace1;
 	if (fv1.size() == 4) {
 		if (hasCommonEdge(fv1[0], fv1[2]))
 			delete_edge(getCommonEdge(fv1[0], fv1[2]));
@@ -928,6 +977,12 @@ MyViewer::MyMesh::FaceHandle MyViewer::delete_edge(MyMesh::EdgeHandle _eh) {
 	return f1;
 }
 void MyViewer::printUnregularVertices() {
+	for (auto f : mesh.faces()) {
+		if (mesh.valence(f) != 4) {
+			qDebug() << "BAJ VAN";
+			//mesh.data(f).tagged2 = true;
+		}
+	}
 	int countRegular = 0;
 	int countUnregular = 0;
 	for (auto v : mesh.vertices()) {
@@ -935,7 +990,7 @@ void MyViewer::printUnregularVertices() {
 			countRegular++;
 		}
 		else
-		{
+		{ if (!mesh.is_boundary(v))
 			countUnregular++;
 		}
 	}
@@ -944,33 +999,151 @@ void MyViewer::printUnregularVertices() {
 
 }
 void MyViewer::quadRegularization(int iterations) {
+	
 	for (size_t i = 0; i < iterations; i++)
 	{
+		qDebug() << "First iteration";
+		for (size_t i = 0; i < iterations; i++)
+		{
 
-		printUnregularVertices();
-		qDebug() << "Remove2ValenceVertices";
-		quadRegularizationRemove2ValenceVertices();
-		printUnregularVertices();
-		qDebug() << "quadRegularizationSwapping";
-		quadRegularizationSwapping();
-		printUnregularVertices();
-		qDebug() << "quadRegularizationCollapsing";
-		quadRegularizationCollapsing();
-		printUnregularVertices();
-		qDebug() << "quadRegularizationSplitting";
-		quadRegularizationSplitting();
-		printUnregularVertices();
+			printUnregularVertices();
+			qDebug() << "Remove2ValenceVertices";
+			quadRegularizationRemove2ValenceVertices();
+			printUnregularVertices();
+			qDebug() << "quadRegularizationSwapping";
+			quadRegularizationSwapping();
+			printUnregularVertices();
+			qDebug() << "quadRegularizationCollapsing";
+			quadRegularizationCollapsing();
+			printUnregularVertices();
+			qDebug() << "quadRegularizationSplitting";
+			quadRegularizationSplitting();
+			printUnregularVertices();
+			qDebug() << "quadRegularizationCompositons";
+			quadRegularizationCompositons();
+			printUnregularVertices();
+			updateMesh();
+		}
+		update();
+		qDebug() << "First transfer";
+		for (size_t i = 0; i < iterations; i++)
+		{
+			quadRegularizationTransfer();
+		}
+		qDebug() << "Second iteration";
+		for (size_t i = 0; i < iterations; i++)
+		{
 
-		updateMesh();
+			printUnregularVertices();
+			qDebug() << "Remove2ValenceVertices";
+			quadRegularizationRemove2ValenceVertices();
+			printUnregularVertices();
+			qDebug() << "quadRegularizationSwapping";
+			quadRegularizationSwapping();
+			printUnregularVertices();
+			qDebug() << "quadRegularizationCollapsing";
+			quadRegularizationCollapsing();
+			printUnregularVertices();
+			qDebug() << "quadRegularizationSplitting";
+			quadRegularizationSplitting();
+			printUnregularVertices();
+			qDebug() << "quadRegularizationCompositons";
+			quadRegularizationCompositons();
+			printUnregularVertices();
+			updateMesh();
+		}
+		qDebug() << "Second transfer";
+		for (size_t i = 0; i < iterations; i++)
+		{
+			quadRegularizationTransfer2();
+		}
+		
 	}
-	for (auto v : mesh.vertices()) {
-		if ( mesh.valence(v) != 4)
-			mesh.data(v).flags.tagged = true;
-		else
-			mesh.data(v).flags.tagged = false;
-
-	}
+	smoothQuadMesh();
 	update();
+}
+void MyViewer::eliminate2and4ValenceBounradies() {
+	for (auto v : mesh.vertices()) {
+		qDebug() << "Test0";
+		if (false &&mesh.is_boundary(v) && mesh.valence(v) == 4) {
+			mesh.data(v).flags.tagged = true;
+			MyMesh::VertexHandle helper1;
+			MyMesh::VertexHandle helper2;
+			MyMesh::FaceHandle helperFace;
+			bool found1 = false;
+			bool found2 = false;
+			for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
+				if (found1 && !mesh.is_boundary(*vv_iter)) {
+					helper2 = vv_iter.handle();
+					found2 = true;
+					break;
+				}
+				if (!found1 && !mesh.is_boundary(*vv_iter)) {
+					helper1 = vv_iter.handle();
+					found1 = true;
+				}
+				
+			}
+			qDebug() << "Test1";
+			if (found1 && found2) {
+				found1 = false;
+				for (MyMesh::VertexFaceIter vf_iter = mesh.vf_iter(v); vf_iter.is_valid(); vf_iter++) {
+					if (isVertexOnFace(helper1, vf_iter.handle()) && isVertexOnFace(helper2, vf_iter.handle())) {
+						found1 = true;
+						helperFace = vf_iter.handle();
+					}
+				}
+				if (found1) {
+					qDebug() << "Test2";
+					collapseVertices(helperFace,helper1,helper2);
+
+					qDebug() << "Test3";
+					mesh.garbage_collection();
+					break;
+				}
+
+			}
+			qDebug() << "Test4";
+		}
+		if (mesh.is_boundary(v) && mesh.valence(v) ==2) {
+			MyMesh::VertexHandle helper1;
+			MyMesh::VertexHandle helper2;
+			MyMesh::FaceHandle helperFace;
+			bool found1 = false;
+			bool found2 = false;
+			for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
+				if (found1) {
+					helper2 = vv_iter.handle();
+					found2 = true;
+					break;
+				}
+				if (!found1) {
+					helper1 = vv_iter.handle();
+					found1 = true;
+				}
+
+			}
+			if (found1 && found2) {
+				found1 = false;
+				for (MyMesh::VertexFaceIter vf_iter = mesh.vf_iter(v); vf_iter.is_valid(); vf_iter++) {
+					if (isVertexOnFace(helper1, vf_iter.handle()) && isVertexOnFace(helper2, vf_iter.handle())) {
+						found1 = true;
+						helperFace = vf_iter.handle();
+					}
+				}
+				if (found1) {
+					qDebug() << "Test2";
+					collapseVertices(helperFace, helper1, helper2);
+
+					qDebug() << "Test3";
+					mesh.garbage_collection();
+					break;
+				}
+
+			}
+
+		}
+	}
 }
 void MyViewer::quadRegularizationRemove2ValenceVertices() {
 	int count = 1;
@@ -1048,9 +1221,9 @@ void MyViewer::quadRegularizationRemove2ValenceVertices() {
 
 
 	for (auto v : mesh.vertices()) {
-		if (mesh.valence(v) == 2)
-			mesh.data(v).flags.tagged = true;
-		else
+		//if (mesh.valence(v) == 2)
+		//	mesh.data(v).flags.tagged = true;
+		//else
 			mesh.data(v).flags.tagged = false;
 	}
 }
@@ -1087,6 +1260,23 @@ void MyViewer::quadRegularizationSwapping() {
 	}
 	mesh.garbage_collection();
 }
+void MyViewer::collapseVertices(MyMesh::FaceHandle fh, MyMesh::VertexHandle vh1, MyMesh::VertexHandle vh2) {
+	MyMesh::FaceHandle f = add_edge(fh, vh1, vh2);
+	for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(fh); fh_iter.is_valid(); fh_iter++) {
+		if ((mesh.from_vertex_handle(fh_iter) == vh1 && mesh.to_vertex_handle(fh_iter) == vh2) ||
+			(mesh.from_vertex_handle(fh_iter) == vh2 && mesh.to_vertex_handle(fh_iter) == vh1)) {
+			MyMesh::HalfedgeHandle he = fh_iter;
+			if (mesh.is_boundary(mesh.from_vertex_handle(fh_iter))) {
+				he = mesh.opposite_halfedge_handle(he);
+			}
+			mesh.collapse(he);
+			//mesh.data(mesh.edge_handle(fh_iter)).tagged = true;
+
+			break;
+		}
+	}
+
+}
 void MyViewer::quadRegularizationCollapsing() {
 	bool collapse = true;
 	while (collapse) {
@@ -1116,60 +1306,21 @@ void MyViewer::quadRegularizationCollapsing() {
 				break;
 			}
 			else if (mesh.valence(vertices[1]) == 5 && mesh.valence(vertices[3]) == 5 && mesh.valence(vertices[0]) == 3 && mesh.valence(vertices[2]) == 3) {
-				MyMesh::FaceHandle f = add_edge(it.handle(), vertices[0], vertices[2]);
-				for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(it); fh_iter.is_valid(); fh_iter++) {
-					if ((mesh.from_vertex_handle(fh_iter) == vertices[0] && mesh.to_vertex_handle(fh_iter) == vertices[2]) ||
-						(mesh.from_vertex_handle(fh_iter) == vertices[2] && mesh.to_vertex_handle(fh_iter) == vertices[0])) {
-						MyMesh::HalfedgeHandle he = fh_iter;
-						if (mesh.is_boundary(mesh.from_vertex_handle(fh_iter))) {
-							he = mesh.opposite_halfedge_handle(he);
-						}
-						mesh.collapse(he);
-						//mesh.data(mesh.edge_handle(fh_iter)).tagged = true;
-
-						break;
-					}
-				}
+				collapseVertices(it.handle(), vertices[0], vertices[2]);				
 				collapse = true;
 				mesh.garbage_collection();
 				break;
 			}
 			else if (mesh.valence(vertices[1]) == 5 && mesh.valence(vertices[3]) == 5 &&
 				(mesh.valence(vertices[0]) == 3 && mesh.valence(vertices[2]) == 4 || mesh.valence(vertices[0]) == 4 && mesh.valence(vertices[2]) == 3)) {
-				MyMesh::FaceHandle f = add_edge(it.handle(), vertices[0], vertices[2]);
-				for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(it); fh_iter.is_valid(); fh_iter++) {
-					if ((mesh.from_vertex_handle(fh_iter) == vertices[2] && mesh.to_vertex_handle(fh_iter) == vertices[0]) ||
-						(mesh.from_vertex_handle(fh_iter) == vertices[0] && mesh.to_vertex_handle(fh_iter) == vertices[2])) {
-						MyMesh::HalfedgeHandle he = fh_iter;
-						if (mesh.is_boundary(mesh.from_vertex_handle(fh_iter))) {
-							he = mesh.opposite_halfedge_handle(he);
-						}
-						mesh.collapse(he);
-						//mesh.data(mesh.edge_handle(fh_iter)).tagged = true;
-
-						break;
-					}
-				}
+				collapseVertices(it.handle(), vertices[0], vertices[2]);
 				collapse = true;
 				mesh.garbage_collection();
 				break;
 			}
 			else if (mesh.valence(vertices[0]) == 5 && mesh.valence(vertices[2]) == 5 &&
 				(mesh.valence(vertices[1]) == 3 && mesh.valence(vertices[3]) == 4 || mesh.valence(vertices[1]) == 4 && mesh.valence(vertices[3]) == 3)) {
-				MyMesh::FaceHandle f = add_edge(it.handle(), vertices[1], vertices[3]);
-				for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(it); fh_iter.is_valid(); fh_iter++) {
-					if ((mesh.from_vertex_handle(fh_iter) == vertices[1] && mesh.to_vertex_handle(fh_iter) == vertices[3]) ||
-						(mesh.from_vertex_handle(fh_iter) == vertices[3] && mesh.to_vertex_handle(fh_iter) == vertices[1])) {
-						MyMesh::HalfedgeHandle he = fh_iter;
-						if (mesh.is_boundary(mesh.from_vertex_handle(fh_iter))) {
-							he = mesh.opposite_halfedge_handle(he);
-						}
-						mesh.collapse(he);
-						//mesh.data(mesh.edge_handle(fh_iter)).tagged = true;
-
-						break;
-					}
-				}
+				collapseVertices(it.handle(), vertices[1], vertices[3]);				
 				collapse = true;
 				mesh.garbage_collection();
 				break;
@@ -1217,6 +1368,922 @@ void MyViewer::quadRegularizationSplitting() {
 		}
 			
 	}
+}
+void MyViewer::quadRegularizationCompositons() {
+	qDebug() << "quadRegularizationCompositonSwapSplit";
+	quadRegularizationCompositonSwapSplit();
+	printUnregularVertices();
+	qDebug() << "quadRegularizationCompositonSwapCollapse";
+	quadRegularizationCompositonSwapCollapse();
+	printUnregularVertices();
+	qDebug() << "quadRegularizationCompositonSplitSplit";
+	quadRegularizationCompositonSplitSplit();
+	printUnregularVertices();
+	qDebug() << "quadRegularizationCompositonCollapseCollapse";
+	quadRegularizationCompositonCollapseCollapse();
+	printUnregularVertices();
+	qDebug() << "quadRegularizationCompositonSwapSwap";
+	quadRegularizationCompositonSwapSwap();
+	printUnregularVertices();
+	qDebug() << "quadRegularizationCompositonSwapSwap2";
+	quadRegularizationCompositonSwapSwap2();
+	printUnregularVertices();
+}
+void MyViewer::quadRegularizationCompositonSwapSplit() {
+	for (auto v : mesh.vertices()) {
+		if (mesh.valence(v) == 5) {
+
+			std::vector<MyMesh::VertexHandle> neighbours;
+			std::vector<int> valences;
+			for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
+				neighbours.push_back(vv_iter.handle());
+				valences.push_back(mesh.valence(vv_iter));
+			}
+			MyMesh::VertexHandle fourV;
+			MyMesh::VertexHandle threeV;
+			MyMesh::VertexHandle middle;
+			bool found = true;
+			if (valences[0] == 4 && valences[2] == 3) {
+				fourV = neighbours[0];
+				middle = neighbours[1];
+				threeV = neighbours[2];
+			}
+			else 	if (valences[0] == 3 && valences[2] == 4) {
+				fourV = neighbours[2];
+				middle = neighbours[1];
+				threeV = neighbours[0];
+			}
+			else if (valences[1] == 4 && valences[3] == 3) {
+				fourV = neighbours[1];
+				middle = neighbours[2];
+				threeV = neighbours[3];
+			}
+			else if (valences[1] == 3 && valences[3] == 4) {
+				fourV = neighbours[3];
+				middle = neighbours[2];
+				threeV = neighbours[1];
+			}
+			else if (valences[2] == 4 && valences[4] == 3) {
+				fourV = neighbours[2];
+				middle = neighbours[3];
+				threeV = neighbours[4];
+			}
+			else if (valences[2] == 3 && valences[4] == 4) {
+				fourV = neighbours[4];
+				middle = neighbours[3];
+				threeV = neighbours[2];
+			}
+			else if (valences[0] == 4 && valences[3] == 3) {
+				fourV = neighbours[0];
+				middle = neighbours[4];
+				threeV = neighbours[3];
+			}
+			else if (valences[0] == 3 && valences[3] == 4) {
+				fourV = neighbours[3];
+				middle = neighbours[4];
+				threeV = neighbours[0];
+			}
+			else if (valences[1] == 4 && valences[4] == 3) {
+				fourV = neighbours[1];
+				middle = neighbours[0];
+				threeV = neighbours[4];
+			}
+			else if (valences[1] == 3 && valences[4] == 4) {
+				fourV = neighbours[4];
+				middle = neighbours[0];
+				threeV = neighbours[1];
+			}
+			else
+				found = false;
+			if (found) {
+				MyMesh::EdgeHandle e = getCommonEdge(fourV, v);
+				MyMesh::FaceHandle f = mesh.face_handle(mesh.halfedge_handle(e, 0));
+				if ( !isVertexOnFace(middle, f) ) {
+					if (mesh.is_boundary(e))
+						continue;
+					f = mesh.face_handle(mesh.halfedge_handle(e, 1));
+				}
+				MyMesh::VertexHandle A;
+				qDebug() << mesh.valence(f);
+				for (MyMesh::FaceVertexIter fv_iter = mesh.fv_iter(f); fv_iter.is_valid(); fv_iter++) {
+					if (fv_iter.handle() != middle && fv_iter.handle() != v && fv_iter.handle() != fourV) {
+						A = fv_iter.handle();
+						break;
+					}
+				}
+
+				MyMesh::VertexHandle B;
+				MyMesh::EdgeHandle e2 = getCommonEdge(fourV, A);
+				MyMesh::FaceHandle f2 = mesh.face_handle(mesh.halfedge_handle(e2, 0));
+
+				if (f2 == f) {
+					if (mesh.is_boundary(e2))
+						continue;
+					f2 = mesh.face_handle(mesh.halfedge_handle(e2, 1));
+				}
+
+				for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(A); vv_iter.is_valid(); vv_iter++) {
+					if (isVertexOnFace(vv_iter.handle(), f2) && vv_iter.handle() != fourV) {
+						B = vv_iter.handle();
+						break;
+					}
+				}
+				
+
+				if ((mesh.valence(A) == 5 && mesh.valence(B) <= 4) || (mesh.valence(A) >= 4 && mesh.valence(B) == 3)) {
+					MyMesh::FaceHandle temp = delete_edge(e2);
+					add_edge(temp, B, v);
+					MyMesh::Point p = mesh.point(v);
+					mesh.set_point(v, (mesh.point(v) + mesh.point(fourV) + mesh.point(threeV)) / 3);
+					MyMesh::HalfedgeHandle temph = mesh.vertex_split(p, v, fourV, threeV);
+					delete_edge(mesh.edge_handle(temph));
+					mesh.garbage_collection();
+
+					break;
+				}
+
+
+			}
+
+
+		}
+	}
+}
+void MyViewer::quadRegularizationCompositonSwapCollapse() {
+	int testcount = 0;
+	for (auto v : mesh.vertices()) {
+		if (mesh.valence(v) == 5) {
+			
+			quadRegularizationCompositonSwapCollapseHelper(v);
+
+		}
+	}
+	qDebug() << "Muveletek: " << testcount;
+	printUnregularVertices();
+}
+void MyViewer::quadRegularizationCompositonSwapCollapseHelper(MyMesh::VertexHandle v, bool otherNeighbour) {
+	std::vector<MyMesh::VertexHandle> neighbours;
+	std::vector<int> valences;
+	for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
+		neighbours.push_back(vv_iter.handle());
+		valences.push_back(mesh.valence(vv_iter));
+	}
+	MyMesh::VertexHandle fourV;
+	MyMesh::VertexHandle threeV;
+	MyMesh::VertexHandle middle;
+	bool found = true;
+	if (valences[0] == 4 && valences[1] == 3 && !otherNeighbour) {
+		fourV = neighbours[0];
+		threeV = neighbours[1];
+	}
+	else if (valences[1] == 4 && valences[0] == 3 && !otherNeighbour) {
+		fourV = neighbours[1];
+		threeV = neighbours[0];
+	}
+	else if (valences[1] == 4 && valences[2] == 3 && !otherNeighbour) {
+		fourV = neighbours[1];
+		threeV = neighbours[2];
+	}
+	else if (valences[2] == 4 && valences[1] == 3) {
+		fourV = neighbours[2];
+		threeV = neighbours[1];
+	}
+	else if (valences[2] == 4 && valences[3] == 3 && !otherNeighbour) {
+		fourV = neighbours[2];
+		threeV = neighbours[3];
+	}
+	else if (valences[3] == 4 && valences[2] == 3) {
+		fourV = neighbours[3];
+		threeV = neighbours[2];
+	}
+	else if (valences[3] == 4 && valences[4] == 3) {
+		fourV = neighbours[3];
+		threeV = neighbours[4];
+	}
+	else if (valences[4] == 4 && valences[3] == 3) {
+		fourV = neighbours[4];
+		threeV = neighbours[3];
+	}
+	else if (valences[0] == 4 && valences[4] == 3) {
+		fourV = neighbours[0];
+		threeV = neighbours[4];
+	}
+	else if (valences[4] == 4 && valences[0] == 3) {
+		fourV = neighbours[4];
+		threeV = neighbours[0];
+	}
+	else {
+		found = false;
+	}
+	if (!found)
+		return;
+	MyMesh::EdgeHandle e = getCommonEdge(v, fourV);
+	if (mesh.is_boundary(e))
+		return;
+	MyMesh::FaceHandle f1 = mesh.face_handle(mesh.halfedge_handle(e, 0));
+	MyMesh::FaceHandle f2 = mesh.face_handle(mesh.halfedge_handle(e, 1));
+	MyMesh::VertexHandle fourV2;
+	MyMesh::VertexHandle A;
+	MyMesh::VertexHandle B;
+	if (!isVertexOnFace(threeV, f1)) {
+		MyMesh::FaceHandle temp = f1;
+		f1 = f2;
+		f2 = temp;
+	}
+	for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(fourV); vv_iter.is_valid(); vv_iter++) {
+		if (isVertexOnFace(vv_iter.handle(), f2) && vv_iter.handle() != v)
+			fourV2 = vv_iter.handle();
+		if (!isVertexOnFace(vv_iter.handle(), f2) && !isVertexOnFace(vv_iter.handle(), f1))
+			A = vv_iter.handle();
+	}
+
+	MyMesh::EdgeHandle e2 = getCommonEdge(fourV, fourV2);
+	MyMesh::FaceHandle f3 = mesh.face_handle(mesh.halfedge_handle(e2, 0));
+	if (!isVertexOnFace(A, f3)) {
+		if (mesh.is_boundary(e2))
+			return;
+		f3 = mesh.face_handle(mesh.halfedge_handle(e2, 1));
+
+	}
+
+	for (MyMesh::FaceVertexIter fv_iter = mesh.fv_iter(f3); fv_iter.is_valid(); fv_iter++) {
+		if (fv_iter.handle() != A && fv_iter.handle() != fourV && fv_iter.handle() != fourV2)
+			B = fv_iter.handle();
+	}
+
+	if ((mesh.valence(B) == 3 && mesh.valence(A) >= 4) || (mesh.valence(B) <= 4 && mesh.valence(A) >= 5)) {
+		mesh.data(A).flags.tagged = true;
+		mesh.data(fourV2).flags.tagged = true;
+
+		MyMesh::FaceHandle temp = delete_edge(getCommonEdge(v, fourV));
+		add_edge(temp, fourV2, threeV);
+		mesh.garbage_collection();
+
+		//collapse
+		MyMesh::FaceHandle tempf = add_edge(f3, B, fourV);
+		mesh.data(tempf).tagged2 = true;
+		for (MyMesh::FaceHalfedgeIter fh_iter = mesh.fh_iter(tempf); fh_iter.is_valid(); fh_iter++) {
+			if ((mesh.from_vertex_handle(fh_iter) == B && mesh.to_vertex_handle(fh_iter) == fourV) ||
+				(mesh.from_vertex_handle(fh_iter) == fourV && mesh.to_vertex_handle(fh_iter) == B)) {
+				MyMesh::HalfedgeHandle he = fh_iter.handle();
+				if (mesh.is_boundary(mesh.from_vertex_handle(fh_iter))) {
+					he = mesh.opposite_halfedge_handle(he);
+				}
+
+				mesh.data(mesh.edge_handle(he)).tagged = true;
+				mesh.collapse(he);
+				mesh.garbage_collection();
+				//mesh.data(mesh.edge_handle(fh_iter)).tagged = true;
+				break;
+			}
+		}
+	}
+	else if (!otherNeighbour)
+		quadRegularizationCompositonSwapCollapseHelper(v, true);
+}
+void MyViewer::quadRegularizationCompositonSplitSplit() {
+	for (auto v : mesh.vertices()) {
+		if (mesh.valence(v) == 5) {
+			std::vector<MyMesh::VertexHandle> neighbours;
+			MyMesh::VertexHandle threeV;
+			bool found = false;
+			int idx = 0;
+			int i = 0;
+			for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
+				if (mesh.valence(vv_iter.handle()) == 3) {
+					threeV = vv_iter.handle();
+					MyMesh::EdgeHandle eh = getCommonEdge(v, threeV);
+					idx = i;
+					found = true;
+				}
+				neighbours.push_back(vv_iter.handle());
+				i++;
+			}
+			if (!found)
+				continue;
+			MyMesh::VertexHandle A1;
+			MyMesh::VertexHandle A2;
+			MyMesh::VertexHandle helper1;
+			MyMesh::VertexHandle helper2;
+			if (idx == 0) {
+				A1 = neighbours[3];
+				helper1 = neighbours[2];
+				A2 = neighbours[2];
+				helper2 = neighbours[3];
+			} else 	if (idx == 1) {
+				A1 = neighbours[3];
+				helper1 = neighbours[4];
+				A2 = neighbours[4];
+				helper2 = neighbours[0];
+			}
+			else if (idx == 2) {
+				A1 = neighbours[0];
+				helper1 = neighbours[4];
+				A2 = neighbours[4];
+				helper2 = neighbours[0];
+			}
+			else if (idx == 3) {
+				A1 = neighbours[0];
+				helper1 = neighbours[1];
+				A2 = neighbours[1];
+				helper2 = neighbours[0];
+			}
+			else if (idx == 4) {
+				A1 = neighbours[1];
+				helper1 = neighbours[0];
+				A2 = neighbours[2];
+				helper2 = neighbours[1];
+			}
+			MyMesh::FaceHandle fHelper1;
+			MyMesh::FaceHandle fHelper2;
+			for (MyMesh::VertexFaceIter vf_iter = mesh.vf_iter(A1); vf_iter.is_valid(); vf_iter++) {
+				if (isVertexOnFace(v, vf_iter.handle()) && isVertexOnFace(helper1, vf_iter.handle()))
+					fHelper1 = vf_iter.handle();
+			}
+			for (MyMesh::VertexFaceIter vf_iter = mesh.vf_iter(A2); vf_iter.is_valid(); vf_iter++) {
+				if (isVertexOnFace(v, vf_iter.handle()) && isVertexOnFace(helper2, vf_iter.handle()))
+					fHelper2 = vf_iter.handle();
+			}
+			MyMesh::FaceHandle fHelper12;
+			MyMesh::FaceHandle fHelper22;
+			for (MyMesh::FaceFaceIter ff_iter = mesh.ff_iter(fHelper1); ff_iter.is_valid(); ff_iter++) {
+				if (!isVertexOnFace(v, ff_iter.handle()) && !isVertexOnFace(helper1, ff_iter.handle())) {
+					fHelper12 = ff_iter.handle();
+					break;
+				}
+			}
+			for (MyMesh::FaceFaceIter ff_iter = mesh.ff_iter(fHelper2); ff_iter.is_valid(); ff_iter++) {
+				if (!isVertexOnFace(v, ff_iter.handle()) && !isVertexOnFace(helper2, ff_iter.handle())) {
+					fHelper22 = ff_iter.handle();
+					break;
+				}
+			}
+			MyMesh::VertexHandle B1;
+			MyMesh::VertexHandle B2;
+			for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(A1); vv_iter.is_valid(); vv_iter++) {
+				if (isVertexOnFace(vv_iter.handle(), fHelper12) && !isVertexOnFace(vv_iter.handle(), fHelper1)) {
+					B1 = vv_iter.handle();
+					break;
+				}
+			}
+			for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(A2); vv_iter.is_valid(); vv_iter++) {
+				if (isVertexOnFace(vv_iter.handle(), fHelper22) && !isVertexOnFace(vv_iter.handle(), fHelper1)) {
+					B2 = vv_iter.handle();
+					break;
+				}
+			}
+			if ((mesh.valence(A1) == 5 && mesh.valence(B1) <= 4) || (mesh.valence(A1) == 4 && mesh.valence(B1) == 3)) {
+				MyMesh::Point p = mesh.point(v);
+				mesh.set_point(v, (mesh.point(v) + mesh.point(threeV) + mesh.point(A1)) / 3);
+				MyMesh::HalfedgeHandle temph = mesh.vertex_split(p, v, threeV, A1);
+				delete_edge(mesh.edge_handle(temph));
+				mesh.garbage_collection();
+			}
+			else if ((mesh.valence(A2) == 5 && mesh.valence(B2) <= 4) || (mesh.valence(A2) == 4 && mesh.valence(B2) == 3)) {
+				MyMesh::Point p = mesh.point(v);
+				mesh.set_point(v, (mesh.point(v) + mesh.point(threeV) + mesh.point(A1)) / 3);
+				MyMesh::HalfedgeHandle temph = mesh.vertex_split(p, v, A1, threeV);
+				delete_edge(mesh.edge_handle(temph));
+				mesh.garbage_collection();
+			}
+		}
+	}
+}
+void MyViewer::quadRegularizationCompositonCollapseCollapse() {
+	for (auto v : mesh.vertices()) {
+		if (mesh.valence(v) == 5) {
+			MyMesh::VertexHandle threeV;
+			bool found = false;
+			for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
+				if (mesh.valence(vv_iter) == 3) {
+					threeV = vv_iter.handle();
+					found = true;
+					break;
+				}
+			}
+			if (!found)
+				continue;
+			found = false;
+			MyMesh::VertexHandle fourV;
+			MyMesh::VertexHandle fourV2;
+			for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
+				for (MyMesh::VertexVertexIter vv_iter2 = mesh.vv_iter(threeV); vv_iter2.is_valid(); vv_iter2++) {
+					if (vv_iter2.handle() != v && mesh.valence(vv_iter2) == 4 && hasCommonEdge(vv_iter.handle(), vv_iter2) && mesh.valence(vv_iter.handle()) == 4) {
+						fourV = vv_iter.handle();
+						found = true;
+						fourV2 = vv_iter2.handle();
+						break;
+					}
+				}
+				if (found)
+					break;
+			}
+			if (!found)
+				continue;
+
+			found = false;
+			MyMesh::VertexHandle A;
+			MyMesh::VertexHandle B;
+			for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(fourV); vv_iter.is_valid(); vv_iter++) {
+				for (MyMesh::VertexVertexIter vv_iter2 = mesh.vv_iter(fourV2); vv_iter2.is_valid(); vv_iter2++) {
+					if (vv_iter.handle() != v && vv_iter.handle() != fourV2 && vv_iter2.handle() != fourV && vv_iter2.handle() != threeV &&
+						hasCommonEdge(vv_iter.handle(), vv_iter2.handle())) {
+						A = vv_iter.handle();
+						B = vv_iter2.handle();
+						found =true;
+						break;
+					}
+				}
+				if (found)
+					break;
+			}
+			if (!found)
+				continue;
+			if ((mesh.valence(A) == 3 && mesh.valence(B) >= 4) || (mesh.valence(A) <= 4 && mesh.valence(B) >= 5)) {
+				for (MyMesh::VertexFaceIter vf_iter = mesh.vf_iter(fourV); vf_iter.is_valid(); vf_iter++) {
+					if (isVertexOnFace(v, vf_iter.handle()) && isVertexOnFace(threeV, vf_iter.handle())) {
+						collapseVertices(vf_iter.handle(), fourV, threeV);
+						break;
+					}
+				}
+				for (MyMesh::VertexFaceIter vf_iter = mesh.vf_iter(A); vf_iter.is_valid(); vf_iter++) {
+					if (isVertexOnFace(B, vf_iter.handle()) && isVertexOnFace(fourV2, vf_iter.handle())) {
+						collapseVertices(vf_iter.handle(), A, fourV2);
+						break;
+					}
+				}
+				mesh.garbage_collection();
+			}
+
+		}
+	}
+}
+void MyViewer::quadRegularizationCompositonSwapSwap() {
+	for (auto f : mesh.faces()) {
+		MyMesh::VertexHandle fiveV;
+		MyMesh::VertexHandle threeV;
+		MyMesh::VertexHandle fourV1;
+		MyMesh::VertexHandle fourV2;
+		std::vector<MyMesh::VertexHandle> vertices;
+		std::vector<int> valences;
+		for (MyMesh::FaceVertexIter fv_iter = mesh.fv_iter(f); fv_iter.is_valid(); fv_iter++) {
+			vertices.push_back(fv_iter.handle());
+			valences.push_back(mesh.valence(fv_iter.handle()));
+		}
+		bool found1 = false;
+		bool found2 = false;
+
+		if (valences[0] == 3 && valences[2] == 5) {
+			fiveV = vertices[2];
+			threeV = vertices[0];
+			if (valences[1] == 4)
+			{
+				found1 = true;
+				fourV1 = vertices[1];
+			}
+			if (valences[3] == 4)
+			{
+				found2 = true;
+				fourV2 = vertices[3];
+			}
+		} else if (valences[2] == 3 && valences[0] == 5) {
+			fiveV = vertices[0];
+			threeV = vertices[2];
+			if (valences[1] == 4)
+			{
+				found1 = true;
+				fourV1 = vertices[1];
+			}
+			if (valences[3] == 4)
+			{
+				found2 = true;
+				fourV2 = vertices[3];
+			}
+		}
+		else if (valences[1] == 3 && valences[3] == 5) {
+			fiveV = vertices[3];
+			threeV = vertices[1];
+			if (valences[0] == 4)
+			{
+				found1 = true;
+				fourV1 = vertices[0];
+			}
+			if (valences[2] == 4)
+			{
+				found2 = true;
+				fourV2 = vertices[2];
+			}
+		} else if (valences[3] == 3 && valences[1] == 5) {
+			fiveV = vertices[1];
+			threeV = vertices[3];
+			if (valences[0] == 4)
+			{
+				found1 = true;
+				fourV1 = vertices[0];
+			}
+			if (valences[2] == 4)
+			{
+				found2 = true;
+				fourV2 = vertices[2];
+			}
+		}
+		MyMesh::FaceHandle f1;
+		MyMesh::FaceHandle f2;
+		if (found1 && mesh.is_boundary(getCommonEdge(fiveV, fourV1)))
+			found1 = false;
+		if (found2 && mesh.is_boundary(getCommonEdge(fiveV, fourV2)))
+			found2 = false;
+		for (MyMesh::FaceFaceIter ff_iter = mesh.ff_iter(f); ff_iter.is_valid(); ff_iter++) {
+			if (found1 && isVertexOnFace(fiveV, ff_iter.handle()) && isVertexOnFace(fourV1, ff_iter.handle())) {
+				f1 = ff_iter.handle();
+			}
+			if (found2 && isVertexOnFace(fiveV, ff_iter.handle()) && isVertexOnFace(fourV2, ff_iter.handle())) {
+				f2 = ff_iter.handle();
+			}
+		}
+		if (found1) {
+			MyMesh::VertexHandle fourV3;
+			MyMesh::VertexHandle A;
+			bool found12 = false;
+			for (MyMesh::FaceVertexIter fv_iter = mesh.fv_iter(f1); fv_iter.is_valid(); fv_iter++) {
+				if (fv_iter.handle() != fourV1 && fv_iter.handle() != fiveV && hasCommonEdge(fiveV, fv_iter.handle()) && mesh.valence(fv_iter.handle()) == 4) {
+
+					fourV3 = fv_iter.handle();
+					found12 = true;
+				}
+				if (fv_iter.handle() != fourV1 && fv_iter.handle() != fiveV && hasCommonEdge(fourV1, fv_iter.handle()))
+					A = fv_iter.handle();
+			}
+			if (found12) {
+				MyMesh::VertexHandle B;
+				found12 = false;
+				for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(fourV3); vv_iter.is_valid(); vv_iter++) {
+					if (vv_iter.handle() != fiveV && hasCommonFace(A, vv_iter.handle())) {
+						B = vv_iter.handle();
+						found12 = true;
+						break;
+					}
+				}
+				if (found12 && ((mesh.valence(A) == 5 && mesh.valence(B) <= 4) ||(mesh.valence(A) >=4 && mesh.valence(B) == 3) )) {
+					MyMesh::EdgeHandle e = getCommonEdge(fiveV, fourV1);
+					MyMesh::FaceHandle f = delete_edge(e);
+					add_edge(f, threeV, fourV3);
+
+					e = getCommonEdge(fourV3, A);
+					f = delete_edge(e);
+					add_edge(f, fourV1, B);
+					mesh.garbage_collection();
+					
+
+				}
+			}
+		}
+
+		else if (found2) {
+			MyMesh::VertexHandle fourV3;
+			MyMesh::VertexHandle A;
+			bool found22 = false;
+			for (MyMesh::FaceVertexIter fv_iter = mesh.fv_iter(f2); fv_iter.is_valid(); fv_iter++) {
+				if (fv_iter.handle() != fourV2 && fv_iter.handle() != fiveV && hasCommonEdge(fiveV, fv_iter.handle()) && mesh.valence(fv_iter.handle()) == 4) {
+
+					fourV3 = fv_iter.handle();
+					found22 = true;
+				}
+				if (fv_iter.handle() != fourV2 && fv_iter.handle() != fiveV && hasCommonEdge(fourV2, fv_iter.handle()))
+					A = fv_iter.handle();
+			}
+			if (found22) {
+				MyMesh::VertexHandle B;
+				found22 = false;
+				for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(fourV3); vv_iter.is_valid(); vv_iter++) {
+					if (vv_iter.handle() != fiveV && hasCommonFace(A, vv_iter.handle())) {
+						B = vv_iter.handle();
+						found22 = true;
+						break;
+					}
+				}
+				if (found22 && ((mesh.valence(A) == 5 && mesh.valence(B) <= 4) || (mesh.valence(A) >= 4 && mesh.valence(B) == 3))) {
+					MyMesh::EdgeHandle e = getCommonEdge(fiveV, fourV2);
+					MyMesh::FaceHandle f = delete_edge(e);
+					add_edge(f, threeV, fourV3);
+
+					e = getCommonEdge(fourV3, A);
+					f = delete_edge(e);
+					add_edge(f, fourV2, B);
+
+					mesh.garbage_collection();
+					
+				}
+			}
+		}
+	}
+}
+void MyViewer::quadRegularizationCompositonSwapSwap2() {
+	for (auto v : mesh.vertices()) {
+		if (mesh.valence(v) == 5) {
+			std::vector<MyMesh::VertexHandle> neighbours;
+			std::vector<int> valences;
+			for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
+				valences.push_back(mesh.valence(vv_iter.handle()));
+				neighbours.push_back(vv_iter.handle());
+			}
+			MyMesh::VertexHandle threeV;
+			MyMesh::VertexHandle fourV1;
+			MyMesh::VertexHandle fourV2;
+			bool found1 = false;
+			bool found2 = false;
+			if (valences[0] == 3 && !mesh.is_boundary(neighbours[0])) {
+				threeV = neighbours[0];
+				if (valences[1] == 4) {
+					fourV1 = neighbours[1];
+					found1 = true;
+				}
+				if (valences[4] == 4) {
+					fourV2 = neighbours[4];
+					found2 = true;
+				}
+			} else 	if (valences[1] == 3 && !mesh.is_boundary(neighbours[1])) {
+				threeV = neighbours[1];
+				if (valences[0] == 4) {
+					fourV1 = neighbours[0];
+					found1 = true;
+				}
+				if (valences[2] == 4) {
+					fourV2 = neighbours[2];
+					found2 = true;
+				}
+			} else if (valences[2] == 3 && !mesh.is_boundary(neighbours[2])) {
+				threeV = neighbours[2];
+				if (valences[1] == 4) {
+					fourV1 = neighbours[1];
+					found1 = true;
+				}
+				if (valences[3] == 4) {
+					fourV2 = neighbours[3];
+					found2 = true;
+				}
+			} else if (valences[3] == 3 && !mesh.is_boundary(neighbours[3])) {
+				threeV = neighbours[3];
+				if (valences[2] == 4) {
+					fourV1 = neighbours[2];
+					found1 = true;
+				}
+				if (valences[4] == 4 ) {
+					fourV2 = neighbours[4];
+					found2 = true;
+				}
+			} else if (valences[4] == 3 && !mesh.is_boundary(neighbours[4])) {
+				threeV = neighbours[4];
+				if (valences[3] == 4) {
+					fourV1 = neighbours[3];
+					found1 = true;
+				}
+				if (valences[0] == 4) {
+					fourV2 = neighbours[0];
+					found2 = true;
+				}
+			}
+			if (found1) {
+				MyMesh::VertexHandle fourV3;
+				bool found3 = false;
+				for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(fourV1); vv_iter.is_valid(); vv_iter++) {
+					if (vv_iter.handle() != v && hasCommonFace(vv_iter.handle(), v) && !hasCommonFace(vv_iter.handle(), threeV) && mesh.valence(vv_iter.handle()) == 4) {
+						found3 = true;
+						fourV3 = vv_iter.handle();
+						break;
+					}
+				}
+				if (found3) {
+					MyMesh::VertexHandle A;
+					found3 = false;
+					for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(fourV3); vv_iter.is_valid(); vv_iter++) {
+						if (vv_iter.handle() != fourV1 && hasCommonFace(vv_iter.handle(), fourV1) && !hasCommonFace(vv_iter.handle(), v)) {
+							found3 = true;
+							A = vv_iter.handle();
+							break;
+						}
+					}
+					if (found3) {
+						MyMesh::VertexHandle B;
+						found3 = false;
+						for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(A); vv_iter.is_valid(); vv_iter++) {
+							if (vv_iter.handle() != fourV3 && hasCommonFace(vv_iter.handle(), fourV3) && !hasCommonFace(vv_iter.handle(), fourV1)) {
+								found3 = true;
+								B = vv_iter.handle();
+								break;
+							}
+						}
+						if (found3 && ((mesh.valence(A) >= 5 && mesh.valence(B) <= 4) || (mesh.valence(A) >= 4 && mesh.valence(B) == 3))) {
+							MyMesh::EdgeHandle e = getCommonEdge(v, fourV1);
+							MyMesh::FaceHandle f = delete_edge(e);
+							add_edge(f, threeV, fourV3);
+
+							e = getCommonEdge(fourV3, A);
+							f = delete_edge(e);
+							add_edge(f, fourV1, B);
+							mesh.garbage_collection();
+						}
+
+					}
+				}
+			}
+			if (found2) {
+				MyMesh::VertexHandle fourV3;
+				bool found3 = false;
+				for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(fourV2); vv_iter.is_valid(); vv_iter++) {
+					if (vv_iter.handle() != v && hasCommonFace(vv_iter.handle(), v) && !hasCommonFace(vv_iter.handle(), threeV) && mesh.valence(vv_iter.handle()) == 4) {
+						found3 = true;
+						fourV3 = vv_iter.handle();
+						break;
+					}
+				}
+				if (found3) {
+					MyMesh::VertexHandle A;
+					found3 = false;
+					for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(fourV3); vv_iter.is_valid(); vv_iter++) {
+						if (vv_iter.handle() != fourV2 && hasCommonFace(vv_iter.handle(), fourV2) && !hasCommonFace(vv_iter.handle(), v)) {
+							found3 = true;
+							A = vv_iter.handle();
+							break;
+						}
+					}
+					if (found3) {
+						MyMesh::VertexHandle B;
+						found3 = false;
+						for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(A); vv_iter.is_valid(); vv_iter++) {
+							if (vv_iter.handle() != fourV3 && hasCommonFace(vv_iter.handle(), fourV3) && !hasCommonFace(vv_iter.handle(), fourV2)) {
+								found3 = true;
+								B = vv_iter.handle();
+								break;
+							}
+						}
+						if (found3 && ((mesh.valence(A) >= 5 && mesh.valence(B) <= 4) || (mesh.valence(A) >= 4 && mesh.valence(B) == 3))) {
+							MyMesh::EdgeHandle e = getCommonEdge(v, fourV2);
+							MyMesh::FaceHandle f = delete_edge(e);
+							add_edge(f, threeV, fourV3);
+
+							e = getCommonEdge(fourV3, A);
+							f = delete_edge(e);
+							add_edge(f, fourV2, B);
+							mesh.garbage_collection();
+						}
+					}
+				}
+			}
+		}
+	}
+}
+void MyViewer::quadRegularizationTransfer() {
+	for (auto v : mesh.vertices()) {
+		if (mesh.valence(v) >= 5) {
+			bool found = false;
+			MyMesh::VertexHandle threeV;
+			for (MyMesh::VertexFaceIter vf_iter = mesh.vf_iter(v); vf_iter.is_valid(); vf_iter++) {
+				found = false;
+				for (MyMesh::FaceVertexIter fv_iter = mesh.fv_iter(vf_iter); fv_iter.is_valid(); fv_iter++) {
+					if (!mesh.is_boundary(fv_iter.handle()) && mesh.valence(fv_iter.handle()) == 3 && fv_iter.handle() != v && !hasCommonEdge(fv_iter,v))
+					{
+						found = true;
+						threeV = fv_iter.handle();
+						break;
+					}
+				}
+				if (found)
+					break;
+			}
+			if (found) {
+				MyMesh::VertexHandle helper;
+				MyMesh::VertexHandle helper2;
+				found = false;
+				bool found2 = false;
+				for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(threeV); vv_iter.is_valid(); vv_iter++) {
+					if (hasCommonFace(vv_iter.handle(), v))
+					{
+						helper = vv_iter.handle();
+						found = true;
+						break;
+					}
+				}
+				for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
+					if (hasCommonFace(vv_iter.handle(), helper) && !hasCommonFace(vv_iter.handle(), threeV))
+					{
+						helper2 = vv_iter.handle();
+						found2 = false;
+						break;
+					}
+				}
+				if (!found || !found2)
+					continue;
+				if (mesh.is_boundary(helper2) || (mesh.is_boundary(helper2) && mesh.valence(helper) == 3))
+					continue;
+				MyMesh::EdgeHandle e = getCommonEdge(helper, v);
+				MyMesh::FaceHandle temp = delete_edge(e);
+				add_edge(temp, helper2, threeV);
+				mesh.data(helper).flags.tagged = true;
+				mesh.data(v).flags.tagged = true;
+				mesh.garbage_collection();
+			}
+		}
+	}
+}
+void MyViewer::quadRegularizationTransfer2() {
+	for (auto v : mesh.vertices()) {
+		//if (mesh.valence(v) == 4 || mesh.is_boundary(v))
+		//	mesh.data(v).flags.tagged = false;
+		//else
+		//	mesh.data(v).flags.tagged = true;
+
+		if (mesh.valence(v) >= 5) {
+			MyMesh::VertexHandle threeV;
+			bool found = false;
+			for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
+				if (mesh.valence(vv_iter.handle()) == 3 && !mesh.is_boundary(vv_iter.handle()))
+				{
+					threeV = vv_iter.handle();
+					//mesh.data(vv_iter.handle()).flags.tagged = true;
+					//mesh.data(v).flags.tagged = true;
+					found = true;
+					break;
+				}
+			}
+			if (!found)
+				continue;
+			qDebug() << "TEST0";
+
+			MyMesh::VertexHandle helper;
+			MyMesh::VertexHandle helper2;
+			found = false;
+			bool found2 = false;
+			for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
+				if (vv_iter.handle() != threeV && hasCommonFace(vv_iter.handle(), threeV))
+				{
+					helper = vv_iter.handle();
+					found = true;
+					break;
+				}
+			}
+			for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(helper); vv_iter.is_valid(); vv_iter++) {
+				if (vv_iter.handle() != v && hasCommonFace(vv_iter.handle(), v) &&!hasCommonFace(vv_iter.handle(), threeV))
+				{
+					helper2 = vv_iter.handle();
+					found2 = true;
+					break;
+				}
+			}
+			qDebug() << "TEST1";
+			if (!found || !found2)
+				continue;
+			MyMesh::EdgeHandle e = getCommonEdge(helper, v);
+			MyMesh::FaceHandle temp = delete_edge(e);
+			add_edge(temp, helper2, threeV);
+			mesh.garbage_collection();
+			qDebug() << "TEST2";
+
+
+		}
+	}
+}
+MyViewer::MyMesh::VertexHandle MyViewer::findWaytoNearestUnregular(MyMesh::VertexHandle vh, MyMesh::VertexHandle notThis) {
+	for (auto v : mesh.vertices()) {
+		mesh.data(v).Bfs.hasPrev = false;
+	}
+	///BFS - START
+	/// ############
+	std::queue<MyMesh::VertexHandle> prevVertices;
+	bool foundOtherVertex = false;
+	MyMesh::VertexHandle pairVertex;
+	prevVertices.push(vh);
+	mesh.data(vh).Bfs.hasPrev = true;
+	MyMesh::VertexHandle tempVh;
+	while (prevVertices.size() > 0 && !foundOtherVertex) {
+		tempVh = prevVertices.front();
+		prevVertices.pop();
+
+		for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(tempVh); vv_iter.is_valid(); vv_iter++) {
+			if (!mesh.data(vv_iter).Bfs.hasPrev) {
+
+				prevVertices.push(vv_iter.handle());
+				mesh.data(vv_iter).Bfs.hasPrev = true;
+				mesh.data(vv_iter).Bfs.prevVertex = tempVh;
+
+				if (mesh.valence(vv_iter.handle()) != 4 && !mesh.is_boundary(vv_iter) && notThis != vv_iter.handle()) {
+					foundOtherVertex = true;
+					pairVertex = vv_iter.handle();
+					break;
+				}
+			}
+		}
+
+	}
+	while (pairVertex != vh) {
+		if (mesh.data(pairVertex).Bfs.prevVertex != vh)
+			pairVertex = mesh.data(pairVertex).Bfs.prevVertex;
+		else
+			return pairVertex;
+	}
+	return pairVertex;
+	///BFS - END
+	/// ############
 }
 void MyViewer::partition() {
 	resetFlags();

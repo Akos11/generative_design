@@ -33,7 +33,8 @@
 MyViewer::MyViewer(QWidget* parent) :
 	QGLViewer(parent), model_type(ModelType::NONE),
 	mean_min(0.0), mean_max(0.0), cutoff_ratio(0.05),
-	show_control_points(true), show_solid(true), show_wireframe(false), show_constraints(true),
+	show_control_points(true), show_solid(true), show_wireframe(false), show_constraints(false),
+	boundaryRemeshL(1.0),
 	visualization(Visualization::PLAIN), slicing_dir(0, 0, 1), slicing_scaling(1),
 	last_filename("")
 {
@@ -689,7 +690,7 @@ void MyViewer::draw() {
 			{
 				count++;
 				if (mesh.data(v).flags.tagged)
-					glColor3d(1.0, 1.0, 0.0);
+					glColor3d(0.0, 1.0, 0.0);
 				//if (mesh.is_boundary(v))
 				//	glColor3d(0.0, 1.0, 0.0);
 				/*if (mesh.status(v).tagged2())
@@ -778,8 +779,8 @@ void MyViewer::draw() {
 	glBegin(GL_POINTS);
 	for (auto v : mesh.vertices()) {
 
-		if (mesh.data(v).flags.tagged)
-			glVertex3dv((mesh.point(v) + Vector(0.0, 0.0, 0.01)).data());
+		//if (mesh.data(v).flags.tagged)
+			//glVertex3dv((mesh.point(v) + Vector(0.0, 0.0, 0.01)).data());
 		
 		/*else if (mesh.data(f).tagged) {
 			glColor3d(0.0, 1.0, 0.0);
@@ -914,6 +915,7 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			else if (model_type == ModelType::BEZIER_SURFACE)
 				openBezier(last_filename, false);
 			update();
+			boundaryRemeshL = 1.0;
 			break;
 		case Qt::Key_O:
 			if (camera()->type() == qglviewer::Camera::PERSPECTIVE)
@@ -960,6 +962,12 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			fairMesh();
 			update();
 			break;
+
+		case Qt::Key_D:
+			decimate();
+			boundaryRemeshL = 4.0;
+			update();
+			break;
 		case Qt::Key_0:
 			show_constraints = !show_constraints;
 			update();
@@ -971,7 +979,7 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			calculateIncidence();
 			break;
 		case Qt::Key_3:
-			reMeshOrganicBoundaries(1.0,5);
+			reMeshOrganicBoundaries(boundaryRemeshL,5);
 			break;
 		case Qt::Key_4:
 			reMeshSmoothing(5);
@@ -992,12 +1000,13 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 
 		case Qt::Key_8:
 			smoothQuadMesh();
+
 			update();
 			//partition();
 			break;
 		case Qt::Key_9:
-
 			partition();
+			//eliminate2and4ValenceBounradies();
 			update();
 			break;
 		default:
