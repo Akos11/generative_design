@@ -2550,9 +2550,9 @@ int MyViewer::findPointsInBoundary(double maxLength) {
 		}
 	}
 	if (taggedV.size() % 2 != 0) {
-		findPointsInBoundary(maxLength * 0.9f);
-	}
-	return taggedV.size();
+		return findPointsInBoundary(maxLength * 0.9f);
+	} else
+		return taggedV.size();
 }
 
 bool MyViewer::Comparer::operator()(const MyMesh::VertexHandle& v1, const MyMesh::VertexHandle& v2) {
@@ -2597,8 +2597,9 @@ void MyViewer::createQuadsFromTagged(int taggedNum) {
 		tagged.push_back(currentHandle);
 		mesh.data(currentHandle).flags.temporary_tagged = true;
 	}
-	//int count = 2;
+	//int count = 3;
 	while (tagged.size() > 0 /*&& count > 0*/) {
+		qDebug() << "#######################xxx\n";
 		int bestIdx = 0;
 		double minDot = 100000;
 		for (size_t i = 0; i < tagged.size(); i++)
@@ -2622,13 +2623,25 @@ void MyViewer::createQuadsFromTagged(int taggedNum) {
 			OpenMesh::Vec3d v0p1 = (mesh.point(p1) - mesh.point(v0)).normalized();
 			OpenMesh::Vec3d v1p0 = (mesh.point(p0) - mesh.point(v1)).normalized();
 			OpenMesh::Vec3d v1p1 = (mesh.point(p1) - mesh.point(v1)).normalized();
-
+			bool convex = true;
+			if (isLeft(mesh.point(v0), mesh.point(p0), mesh.point(v1)) != isLeft(mesh.point(v0), mesh.point(p0), mesh.point(p1)))
+				convex = false;
+			if (isLeft(mesh.point(p0), mesh.point(v1), mesh.point(v0)) != isLeft(mesh.point(p0), mesh.point(v1), mesh.point(p1)))
+				convex = false;
+			if (isLeft(mesh.point(v1), mesh.point(p1), mesh.point(v0)) != isLeft(mesh.point(v1), mesh.point(p1), mesh.point(p0)))
+				convex = false;
+			if (isLeft(mesh.point(p1), mesh.point(v0), mesh.point(v1)) != isLeft(mesh.point(p1), mesh.point(v0), mesh.point(p0)))
+				convex = false;
+			if (!convex)
+				continue;
 			double temp = abs(dot(p0v0, p0v1)) + abs(dot(p1v0, p1v1)) + abs(dot(v0p0, v0p1)) + abs(dot(v1p0, v1p1));
+			qDebug() << "idx: " << idx0 << " dot: " << temp << "\n";
 			if (temp < minDot) {
 				bestIdx = idx0;
 				minDot = temp;
 			}
 		}
+		qDebug() << "bestidx: " << bestIdx << " dot: " << minDot << "\n";
 		int idx0 = bestIdx;
 		int idx1 = (bestIdx + 1) % tagged.size();
 		int idx2 = (bestIdx + 2) % tagged.size();
@@ -2658,4 +2671,7 @@ void MyViewer::createQuadsFromTagged(int taggedNum) {
 		tagged = taggedTemp;
 		//count--;
 	}
+}
+bool MyViewer::isLeft(MyMesh::Point a, MyMesh::Point b, MyMesh::Point c) {
+	return ((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) > 0;
 }

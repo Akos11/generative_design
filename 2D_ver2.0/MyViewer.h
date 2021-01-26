@@ -191,6 +191,7 @@ private:
 			
 			};
 			void createQuadsFromTagged(int taggedNum);
+			bool isLeft(MyMesh::Point a, MyMesh::Point b, MyMesh::Point c);
 
 	//void collapse2(MyMesh::HalfedgeHandle _hh);
 	//void collapse_edge2(MyMesh::HalfedgeHandle _hh);

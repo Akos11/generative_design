@@ -946,6 +946,7 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 	if (e->modifiers() == Qt::NoModifier)
 		switch (e->key()) {
 		case Qt::Key_R:
+			quadPartition.clear();
 			if (model_type == ModelType::MESH)
 				openMesh(last_filename, false);
 			else if (model_type == ModelType::BEZIER_SURFACE)
@@ -1027,7 +1028,7 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 		case Qt::Key_6:
 			////catmullClark();
 			//quadrangulate();
-			createQuadPartitioning(20.0f);
+			createQuadPartitioning(40.0f);
 			updateVertexNormalsPartition();
 			show_partitioning = true;
 			update();
