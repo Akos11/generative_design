@@ -770,23 +770,9 @@ void MyViewer::draw() {
 			glEnd();
 		}
 	}
-	if (show_partitioning) {
-		glColor3d(1.0,0.0, 0.0);
-		glLineWidth(5.5f);
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		glBegin(GL_POLYGON);
-		for (auto f : quadPartition.faces()) {
-			glColor3d(0.0, 1.0, 0.0);
-			glBegin(GL_POLYGON);
-			for (auto v : quadPartition.fv_range(f)) {
-				glNormal3dv(quadPartition.normal(v).data());
-				glVertex3dv(quadPartition.point(v).data());
-			}
-			glEnd();
-		}
-	}
+	drawPartitioning();
 	glColor3d(1.0, 0.0, 0.0);
-
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	for (auto f : mesh.faces()) {
 		bool yellow = true;
 		for (auto v : mesh.fv_range(f))
@@ -833,7 +819,36 @@ void MyViewer::draw() {
 
 
 }
+void MyViewer::drawPartitioning() {
+	if (show_partitioning) {
+		glLineWidth(5.5f);
+		glColor3d(0.0, 1.0, 0.0);
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		//glBegin(GL_POLYGON);
+		for (auto f : quadPartition.faces()) {
 
+			glBegin(GL_POLYGON);
+			for (auto v : quadPartition.fv_range(f)) {
+				glNormal3dv(quadPartition.normal(v).data());
+				glVertex3dv(quadPartition.point(v).data());
+			}
+			glEnd();
+		}
+	}
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	for (auto f : quadPartition.faces()) {
+		glBegin(GL_POLYGON);
+		if (quadPartition.data(f).tagged) {
+			glColor3d(1.0, 1.0, 0.0);
+			for (auto v : quadPartition.fv_range(f))
+			{
+				glVertex3dv((quadPartition.point(v) + Vector(0.0, 0.0, 0.005)).data());
+			}
+			glColor3d(1.0, 0.0, 0.0);
+		}
+		glEnd();
+	}
+}
 void MyViewer::drawControlNet() const {
 	glDisable(GL_LIGHTING);
 	glLineWidth(3.0);
@@ -1028,14 +1043,16 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 		case Qt::Key_6:
 			////catmullClark();
 			//quadrangulate();
-			createQuadPartitioning(40.0f);
+			createQuadPartitioning(15.0f);
 			updateVertexNormalsPartition();
 			show_partitioning = true;
 			update();
 			break;
 
 		case Qt::Key_7:
-			quadRegularization();
+			//quadRegularization();
+			smoothQuadMesh2();
+			update();
 			//smoothQuadMesh();
 			break;
 

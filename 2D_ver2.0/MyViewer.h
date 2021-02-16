@@ -179,6 +179,7 @@ private:
 
 	//generative ver 2.0
 			void createQuadPartitioning(double maxLength);
+			void createQuadPartitioningParametrization(double _maxLength, double angleWeight);
 			int findPointsInBoundary(double maxLength);
 			struct Comparer
 			{
@@ -192,7 +193,10 @@ private:
 			};
 			void createQuadsFromTagged(int taggedNum);
 			bool isLeft(MyMesh::Point a, MyMesh::Point b, MyMesh::Point c);
-
+			double angleInBoundary(MyMesh::VertexHandle v);
+			void smoothQuadMesh2(int iterations = 5);
+			void reMeshVertexPositions2(bool remeshUnlockedBoundaries = false);
+			void drawPartitioning();
 	//void collapse2(MyMesh::HalfedgeHandle _hh);
 	//void collapse_edge2(MyMesh::HalfedgeHandle _hh);
 	//void collapse_loop2(MyMesh::HalfedgeHandle _hh);

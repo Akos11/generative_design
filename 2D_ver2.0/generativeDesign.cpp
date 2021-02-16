@@ -2429,8 +2429,9 @@ void MyViewer::smoothQuadMesh(int iterations) {
 //Ver2.0
 
 void MyViewer::createQuadPartitioning(double maxLength) {
-	int taggedNum = findPointsInBoundary(maxLength);
-	createQuadsFromTagged(taggedNum);
+	//int taggedNum = findPointsInBoundary(maxLength);
+	//createQuadsFromTagged(taggedNum);
+	createQuadPartitioningParametrization(maxLength,2.0f);
 }
 int MyViewer::findPointsInBoundary(double maxLength) {
 	mesh.reset_status();
@@ -2674,4 +2675,167 @@ void MyViewer::createQuadsFromTagged(int taggedNum) {
 }
 bool MyViewer::isLeft(MyMesh::Point a, MyMesh::Point b, MyMesh::Point c) {
 	return ((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) > 0;
+}
+void MyViewer::createQuadPartitioningParametrization(double _maxLength, double angleWeight) {
+	double maxLength = _maxLength;
+	float minX = 10000000000.0f;
+	float minY = 10000000000.0f;
+	float maxX = -10000000000.0f;
+	float maxY = -10000000000.0f;
+	MyMesh::Point point;
+	for (auto v : mesh.vertices())
+	{
+		point = mesh.point(v);
+		if (point[0] < minX)
+			minX = point[0];
+		if (point[1] < minY)
+			minY = point[1];
+
+		if (point[0] > maxX)
+			maxX = point[0];
+		if (point[1] > maxY)
+			maxY = point[1];
+
+	}
+	float countX = (maxX - minX) / maxLength;
+	float countY = (maxY - minY) / maxLength;
+	//qDebug() << "countX: " << countX << " (int)countX: " << (int)countX;
+	//qDebug() << "countY: " << countY << " (int)countY: " << (int)countY;
+	while (countX - (int)countX < maxLength * 0.01 || countY - (int)countY < maxLength * 0.01) {
+		maxLength = maxLength * 1.005;
+		countX = (maxX - minX) / maxLength;
+		countY = (maxY - minY) / maxLength;
+	}
+
+	for (size_t i = 0; i < (maxX - minX)/ maxLength; i++)
+	{
+		for (size_t j = 0; j < (maxY - minY) / maxLength; j++)
+		{
+			MyMesh::VertexHandle vhandle[4];
+			//MyMesh::Point offset = MyMesh::Point(i*maxLength, j * maxLength, 0.3);
+			vhandle[0] = quadPartition.add_vertex(MyMesh::Point(minX + i * maxLength, minY + j * maxLength, 0.3));
+			vhandle[1] = quadPartition.add_vertex(MyMesh::Point(minX + (i+1) * maxLength, minY + j * maxLength, 0.3));
+			vhandle[2] = quadPartition.add_vertex(MyMesh::Point(minX + (i+1) * maxLength, minY + (j+1) * maxLength, 0.3));
+			vhandle[3] = quadPartition.add_vertex(MyMesh::Point(minX + i * maxLength, minY + (j+1) * maxLength, 0.3));
+			std::vector<MyMesh::VertexHandle>  face_vhandles;
+			face_vhandles.clear();
+			face_vhandles.push_back(vhandle[0]);
+			face_vhandles.push_back(vhandle[1]);
+			face_vhandles.push_back(vhandle[2]);
+			face_vhandles.push_back(vhandle[3]);
+			quadPartition.add_face(face_vhandles);
+		}
+	}
+	int testidx = 0;
+	for (auto v : quadPartition.vertices()) {
+		quadPartition.data(v).flags.tagged = false;
+		float minDist = 10000.0f;
+		MyMesh::Point newPoint;
+		MyMesh::VertexHandle newPointVH;
+		for (auto v2 : mesh.vertices())
+		{
+			float dist = (mesh.point(v2) - quadPartition.point(v)).length();
+			if (mesh.is_boundary(v2)) {
+				dist -= (1.0 - abs(angleInBoundary(v2)))* angleWeight;
+			}
+			if (dist < minDist) {
+				minDist = dist;
+				newPoint = mesh.point(v2);
+				quadPartition.data(v).flags.temporary_tagged = mesh.is_boundary(v2);
+				newPointVH = v2;
+			}
+		}
+		if (newPoint[0] >= quadPartition.point(v)[0] - maxLength && newPoint[1] >= quadPartition.point(v)[1] - maxLength &&
+			newPoint[0] <= quadPartition.point(v)[0] + maxLength && newPoint[1] <= quadPartition.point(v)[1] + maxLength) {
+			quadPartition.set_point(v, newPoint);
+		}
+		else {
+			if (testidx == 118)
+			{
+				qDebug() << "newPoint x: " << newPoint[0] << " y: " << newPoint[1] << "\n";
+				qDebug() << "maxLength: " << maxLength << "\n";
+				qDebug() << "quadPartition.point(v) x: " << quadPartition.point(v)[0] << " y: " << quadPartition.point(v)[1] << "\n";
+				mesh.data(newPointVH).flags.tagged = true;
+			}
+				
+			quadPartition.data(v).flags.tagged = true;
+			
+		}
+		testidx++;
+	}
+	quadPartition.request_face_status();
+	quadPartition.request_edge_status();
+	quadPartition.request_vertex_status();
+	for (auto v : quadPartition.vertices()) {
+		if (quadPartition.data(v).flags.tagged)
+			quadPartition.delete_vertex(v);
+	}
+	quadPartition.garbage_collection();
+	for (auto f : quadPartition.faces()) {
+		MyMesh::Point v[4];
+		int boundaryCount = 0;
+		int idx = 0;
+		for (MyMesh::FaceVertexIter fv_iter = quadPartition.fv_iter(f); fv_iter.is_valid(); fv_iter++)
+		{
+			v[idx++] = quadPartition.point(fv_iter.handle());
+			if (quadPartition.data(fv_iter.handle()).flags.temporary_tagged)
+				boundaryCount++;
+		}
+		float area = abs(0.5 * ((v[0][0] * v[1][1] + v[1][0] * v[2][1] + v[2][0] * v[3][1] + v[3][0] * v[0][1]) - (v[1][0] * v[0][1] + v[2][0] * v[1][1] + v[3][0] * v[2][1] + v[0][0] * v[3][1])));
+		
+		if (area < maxLength*maxLength * 0.25 && boundaryCount == 3) {
+			quadPartition.data(f).tagged = true;
+		}
+	}
+
+}
+double MyViewer::angleInBoundary(MyMesh::VertexHandle v)
+{
+	MyMesh::VertexHandle neighbour0;
+	MyMesh::VertexHandle neighbour1;
+	bool found1 = false;
+	for (MyMesh::VVIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
+		if (mesh.is_boundary(vv_iter) && mesh.is_boundary(getCommonEdge(v, vv_iter.handle()))) {
+			if (!found1)
+			{
+				neighbour0 = vv_iter.handle();
+				found1 = true;
+			}
+			else {
+				neighbour1 = vv_iter.handle();
+				break;
+			}
+		}
+	}
+	OpenMesh::Vec3d vNeighbour0 = (mesh.point(v) - mesh.point(neighbour0)).normalized();
+	OpenMesh::Vec3d vNeighbour1 = (mesh.point(v) - mesh.point(neighbour1)).normalized();
+	return dot(vNeighbour0, vNeighbour1);
+}
+void MyViewer::smoothQuadMesh2(int iterations) {
+
+	for (size_t i = 0; i < iterations; i++)
+	{
+		reMeshVertexPositions2();
+	}
+
+}
+void MyViewer::reMeshVertexPositions2(bool remeshUnlockedBoundaries) {
+	for (auto vh : quadPartition.vertices())
+	{
+		if (quadPartition.data(vh).flags.temporary_tagged)
+			continue;
+		MyMesh::Point center = MyMesh::Point(0, 0, 0);
+		MyMesh::VertexVertexIter    vv_it;
+		int n = 0;
+		for (vv_it = quadPartition.vv_iter(vh); vv_it.is_valid(); ++vv_it) {
+			center += quadPartition.point(*vv_it);
+			n++;
+		}
+		center = center / n;
+		MyMesh::Point xminusc = quadPartition.point(vh) - center;
+		//double s = quadPartition.normal(vh)[0] * xminusc[0] + quadPartition.normal(vh)[1] * xminusc[1] + quadPartition.normal(vh)[2] * xminusc[2];
+		//qDebug() << mesh.normal(vh).length();
+		quadPartition.set_point(vh, center/* + s * quadPartition.normal(vh)*/);
+		break;
+	}
 }
