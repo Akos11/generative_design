@@ -2429,9 +2429,9 @@ void MyViewer::smoothQuadMesh(int iterations) {
 //Ver2.0
 
 void MyViewer::createQuadPartitioning(double maxLength) {
-	//int taggedNum = findPointsInBoundary(maxLength);
-	//createQuadsFromTagged(taggedNum);
-	createQuadPartitioningParametrization(maxLength,2.0f);
+	int taggedNum = findPointsInBoundary(maxLength);
+	createQuadsFromTagged(taggedNum);
+	//createQuadPartitioningParametrization(maxLength,2.0f);
 }
 int MyViewer::findPointsInBoundary(double maxLength) {
 	mesh.reset_status();
