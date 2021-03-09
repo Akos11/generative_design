@@ -139,11 +139,11 @@ private:
 		void catmullClark();
 		void partition();
 			int counter;
-
+		MyMesh::EdgeHandle getCommonEdge(MyMesh::VertexHandle vh1, MyMesh::VertexHandle vh2);
 		//PDE based approach
 
 		void initiatePDE();
-		void initiateBoundaryConstraints();
+		void initiateBoundaryConstraints(double angleThreshold);
 		void drawPDEu();
 		void drawPDEcross();
 	bool is_collapse_ok2(MyMesh::HalfedgeHandle v0v1);

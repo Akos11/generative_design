@@ -546,36 +546,74 @@ void MyViewer::initiatePDE() {
 		mesh.data(v).idx = i++;
 		mesh.data(v).u = OpenMesh::Vec3d(0.0);
 	}
-
-	initiateBoundaryConstraints();
+	double angleThreshold = (3.14159 / 2.0) * 1.5f;
+	initiateBoundaryConstraints(angleThreshold);
 }
 
-void MyViewer::initiateBoundaryConstraints() {
+void MyViewer::initiateBoundaryConstraints(double angleThreshold) {
 	for (auto v : mesh.vertices()) {
 		if (mesh.is_boundary(v)) {
 			MyMesh::Point neighbour1;
 			MyMesh::Point neighbour2;
 			bool found = false;
 			for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(v); vv_iter.is_valid(); vv_iter++) {
-				if (mesh.is_boundary(vv_iter.handle())) {
+				if (mesh.is_boundary(vv_iter.handle()) && mesh.is_boundary(getCommonEdge(v,vv_iter.handle()))) {
 					if (!found) {
 						neighbour1 = mesh.point(vv_iter.handle());
 						found = true;
 					}
 					else {
 						neighbour2 = mesh.point(vv_iter.handle());
+						break;
 					}
 				}
 			}
+			OpenMesh::Vec3d vNeighbour0 = (neighbour1 - mesh.point(v)).normalized();
+			OpenMesh::Vec3d vNeighbour1 = (neighbour2 - mesh.point(v)).normalized();
+
+			double dotProduct = dot(vNeighbour0, vNeighbour1);
+			dotProduct = fmaxf(-1, dotProduct);
+			dotProduct = fminf(1, dotProduct);
+			double alpha = acos(dotProduct);
+			//printf("%f %f\n", dotProduct, alpha);
 			double randomNumber = ((double)rand()/ RAND_MAX )*2- 1;
 			double randomNumber2 = ((double)rand() / RAND_MAX) * 2 - 1;
-			mesh.data(v).u = OpenMesh::Vec3d(randomNumber, randomNumber2,0.0);
+			mesh.data(v).u = OpenMesh::Vec3d(0, 0,0.0);
+			OpenMesh::Vec3d temp = vNeighbour0 + vNeighbour1;
+			if (alpha > angleThreshold) {
+				if (abs(alpha - 3.14159) < 0.001)
+					temp = vNeighbour0;
+				temp = temp.normalized();
+			} 
+			else {
+				temp = temp.normalized();
+				OpenMesh::Vec3d temp2 = OpenMesh::Vec3d(temp[1],-temp[0],0);
+				temp = temp + temp2;
+				temp = temp.normalized();
+			}
+			if (temp[0] < 0.0)
+			{
+				temp[0] = temp[0] * -1;
+				temp[1] = temp[1] * -1;
+			}
+			if (temp[1] < 0.0)
+			{
+				double t = temp[0];
+				temp[0] = temp[1] * -1;
+				temp[1] = t;
+			}
+			double theta = acos(temp[0]);
+			theta = theta * 4.0;
+			mesh.data(v).u = OpenMesh::Vec3d(cos(theta), sin(theta), 0.0);
+			
 		}
 	}
-	//for (auto v : mesh.vertices()) {
-	//	if (mesh.data(v).u.length() > 0.0) {
-	//		double theta = (atan2(mesh.data(v).u[0], mesh.data(v).u[1]) + 3.14159)/ 4.0;
-	//		printf("%f\n", theta);
-	//	}
-	//}
+}
+MyViewer::MyMesh::EdgeHandle MyViewer::getCommonEdge(MyMesh::VertexHandle vh1, MyMesh::VertexHandle vh2) {
+	for (MyMesh::VertexIHalfedgeIter vih_iter = mesh.vih_iter(vh1); vih_iter.is_valid(); vih_iter++) {
+		if (mesh.to_vertex_handle(vih_iter.handle()) == vh2 || mesh.from_vertex_handle(vih_iter.handle()) == vh2)
+			return mesh.edge_handle(vih_iter.handle());
+	}
+
+	throw;
 }

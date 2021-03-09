@@ -916,7 +916,10 @@ void MyViewer::drawPDEcross() {
 	const Vec& offset = Vec(0.0, 0.0, 0.03);
 	for (auto v : mesh.vertices()) {
 		if (mesh.data(v).u.length() > 0.0) {
-			double theta = (atan2(mesh.data(v).u[0], mesh.data(v).u[1]) + 3.14159) / 4.0;
+			double atang = atan2(mesh.data(v).u[1], mesh.data(v).u[0]);
+			if (atang < 0)
+				atang = 3.14159 * 2 + atang;
+			double theta = (atang) / 4.0;
 			const Vec& p = Vec(mesh.point(v)) + offset;
 			const Vec& v1 = Vec(cos(theta), sin(theta),0.0) + offset;
 			const Vec& v2 = Vec(cos(theta+3.14159/2), sin(theta+3.14159/2), 0.0) + offset;
