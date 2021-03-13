@@ -1063,6 +1063,7 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			break;
 
 		case Qt::Key_7:
+			initVFunction();
 			update();
 			break;
 

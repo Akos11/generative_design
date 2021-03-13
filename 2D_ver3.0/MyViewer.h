@@ -139,6 +139,7 @@ private:
 		void catmullClark();
 		void partition();
 			int counter;
+		bool hasCommonEdge(MyMesh::VertexHandle vh1, MyMesh::VertexHandle vh2);
 		MyMesh::EdgeHandle getCommonEdge(MyMesh::VertexHandle vh1, MyMesh::VertexHandle vh2);
 		//PDE based approach
 
@@ -146,6 +147,8 @@ private:
 		void initiateBoundaryConstraints(double angleThreshold);
 		void drawPDEu();
 		void drawPDEcross();
+		void initVFunction();
+		void calculateGrad(MyMesh::VertexHandle* omega, double* func, double* gradFunc);
 	bool is_collapse_ok2(MyMesh::HalfedgeHandle v0v1);
 	//////////////////////
 	// Member variables //

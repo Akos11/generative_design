@@ -609,6 +609,13 @@ void MyViewer::initiateBoundaryConstraints(double angleThreshold) {
 		}
 	}
 }
+bool MyViewer::hasCommonEdge(MyMesh::VertexHandle vh1, MyMesh::VertexHandle vh2) {
+	for (MyMesh::VertexVertexIter vv_iter = mesh.vv_iter(vh1); vv_iter.is_valid(); vv_iter++) {
+		if (vv_iter.handle() == vh2)
+			return true;
+	}
+	return false;
+}
 MyViewer::MyMesh::EdgeHandle MyViewer::getCommonEdge(MyMesh::VertexHandle vh1, MyMesh::VertexHandle vh2) {
 	for (MyMesh::VertexIHalfedgeIter vih_iter = mesh.vih_iter(vh1); vih_iter.is_valid(); vih_iter++) {
 		if (mesh.to_vertex_handle(vih_iter.handle()) == vh2 || mesh.from_vertex_handle(vih_iter.handle()) == vh2)
@@ -616,4 +623,53 @@ MyViewer::MyMesh::EdgeHandle MyViewer::getCommonEdge(MyMesh::VertexHandle vh1, M
 	}
 
 	throw;
+}
+void MyViewer::initVFunction() {
+
+	MyMesh::VertexHandle* omega = new MyMesh::VertexHandle[mesh.n_vertices()];
+	double* vFunc = new double[mesh.n_vertices()];
+	double* gradVFunc = new double[mesh.n_vertices()];
+
+	int idx = 0;
+	for (auto v : mesh.vertices()) {
+		omega[idx] = v;
+		vFunc[idx] = 0;
+		gradVFunc[idx] = 0;
+		idx++;
+	}
+	vFunc[0] = 1;
+	calculateGrad(omega,vFunc, gradVFunc);
+	for (int i = 0; i < mesh.n_vertices(); i++)
+	{
+		if (fabs( vFunc[i]) > 0.0001)
+			qDebug() <<i<< ": " << vFunc[i] << " ";
+	}
+	qDebug() << "GRADIENT";
+	for (int i = 0; i < mesh.n_vertices(); i++)
+	{
+		if (fabs(gradVFunc[i]) > 0.0001)
+			qDebug() << i << ": "<< gradVFunc[i] << " ";
+	}
+	delete[] omega;
+	delete[] vFunc;
+	delete[] gradVFunc;
+}
+
+void MyViewer::calculateGrad(MyMesh::VertexHandle* omega,  double* func, double* gradFunc) {
+
+	for (size_t i = 0; i < mesh.n_vertices(); i++)
+	{
+		std::vector<int> neighbours;
+		for (size_t j = 0; j < mesh.n_vertices(); j++)
+		{
+			if (i != j && hasCommonEdge(omega[i],omega[j])) {
+				neighbours.push_back(j);
+			}
+		}
+		double grad = 0;
+		for (auto n : neighbours) {
+			grad += (func[n] - func[i]) / (mesh.point(omega[n]) - mesh.point(omega[i])).length();
+		}
+		gradFunc[i] = grad;
+	}
 }
