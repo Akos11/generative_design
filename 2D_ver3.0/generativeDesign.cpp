@@ -1,8 +1,9 @@
 #include "MyViewer.h"
 #include <OpenMesh/Tools/Smoother/JacobiLaplaceSmootherT.hh>
 #include <iostream>
-
-
+#include <gsl/gsl_linalg.h>
+#include <iostream>
+#include <fstream>
 
 void MyViewer::resetFlags() {
 	for (auto v : mesh.vertices()) {
@@ -580,6 +581,11 @@ void MyViewer::initiateBoundaryConstraints(double angleThreshold) {
 			double randomNumber2 = ((double)rand() / RAND_MAX) * 2 - 1;
 			mesh.data(v).u = OpenMesh::Vec3d(0, 0,0.0);
 			OpenMesh::Vec3d temp = vNeighbour0 + vNeighbour1;
+			double wtemp[3];
+			MyMesh::VertexHandle v_arraytemp[3];
+			Vector tempMiddle = neighbour1 + 0.5 * (neighbour2 - neighbour1);
+			MyMesh::FaceHandle tempF2 = getFace(tempMiddle, wtemp, v_arraytemp);
+			
 			if (alpha > angleThreshold) {
 				if (abs(alpha - 3.14159) < 0.001)
 					temp = vNeighbour0;
@@ -590,6 +596,12 @@ void MyViewer::initiateBoundaryConstraints(double angleThreshold) {
 				OpenMesh::Vec3d temp2 = OpenMesh::Vec3d(temp[1],-temp[0],0);
 				temp = temp + temp2;
 				temp = temp.normalized();
+				if (wtemp[0] < -0.5) {
+					double wtemp[3];
+					MyMesh::VertexHandle v_arraytemp[3];
+					MyMesh::FaceHandle tempF = getFace(mesh.point(v), wtemp, v_arraytemp);
+					singularities.push_back(Singularity(mesh.point(v), tempF));
+				}
 			}
 			if (temp[0] < 0.0)
 			{
@@ -624,52 +636,888 @@ MyViewer::MyMesh::EdgeHandle MyViewer::getCommonEdge(MyMesh::VertexHandle vh1, M
 
 	throw;
 }
-void MyViewer::initVFunction() {
-
+void MyViewer::initVFunction(int iterations) {
+	clock_t start = clock() / (CLOCKS_PER_SEC / 1000);
 	MyMesh::VertexHandle* omega = new MyMesh::VertexHandle[mesh.n_vertices()];
+
+	std::vector<int>* neighbours = new std::vector<int>[mesh.n_vertices()];
+
+	//V
 	double* vFunc = new double[mesh.n_vertices()];
 	double* gradVFunc = new double[mesh.n_vertices()];
+	//U
+	double* uFunc = new double[mesh.n_vertices()];
+	double* gradUFunc = new double[mesh.n_vertices()];
+	//U0
+	double* u0Func = new double[mesh.n_vertices()];
+	double* gradU0Func = new double[mesh.n_vertices()];
 
-	int idx = 0;
+	int* matrixIdx = new int[mesh.n_vertices()];
+
+	int rowNum = 0;
 	for (auto v : mesh.vertices()) {
-		omega[idx] = v;
-		vFunc[idx] = 0;
-		gradVFunc[idx] = 0;
-		idx++;
+		if (!mesh.is_boundary(v))
+			rowNum++;
 	}
-	vFunc[0] = 1;
-	calculateGrad(omega,vFunc, gradVFunc);
-	for (int i = 0; i < mesh.n_vertices(); i++)
+	double* A_data = new double[rowNum * rowNum * 4];
+	double* b_data = new double[rowNum * 2];
+	for (size_t Ui = 0; Ui < 2; Ui++)
 	{
-		if (fabs( vFunc[i]) > 0.0001)
-			qDebug() <<i<< ": " << vFunc[i] << " ";
+		int idx = 0;
+		int mIdx = 0;
+		for (auto v : mesh.vertices()) {
+			omega[idx] = v;
+			vFunc[idx] = 0;
+			gradVFunc[idx] = 0;
+			if (mesh.is_boundary(v)) {
+				u0Func[idx] = mesh.data(v).u[Ui];
+				matrixIdx[idx] = 0;
+			}
+			else {
+				u0Func[idx] = 0;
+				matrixIdx[idx] = mIdx++;
+			}
+			uFunc[idx] = 0;
+			gradU0Func[idx] = 0;
+			gradUFunc[idx] = 0;
+			idx++;
+		}
+		buildNeighbours(omega, neighbours);
+		calculateGrad(omega, neighbours, u0Func, gradU0Func);
+
+		int rowIdx = 0;
+		for (int i = 0; i < mesh.n_vertices(); i++) {
+			start = clock() / (CLOCKS_PER_SEC / 1000);
+			if (mesh.is_boundary(omega[i]))
+				continue;
+			for (int j = 0; j < mesh.n_vertices(); j++) {
+				vFunc[j] = 0;
+				gradVFunc[j] = 0;
+				A_data[(rowIdx*2 + Ui) * rowNum*2 + matrixIdx[j]*2 +Ui] = 0;
+			}
+			vFunc[i] = 1;
+			calculateGrad(omega, neighbours, vFunc, gradVFunc);
+			double sumRight = 0;
+
+			for (int j = 0; j < mesh.n_vertices(); j++) {
+				if (gradVFunc[j] != 0) {
+					sumRight += gradU0Func[j] * gradVFunc[j];
+				}
+				double L = calculateL(omega, neighbours, j);
+				for (auto n : neighbours[j]) {
+					if (!mesh.is_boundary(omega[n])) {
+						A_data[(rowIdx * 2 + Ui) * rowNum*2 + matrixIdx[n] * 2 + Ui] += (1 / (mesh.point(omega[n]) - mesh.point(omega[j])).length()) * gradVFunc[j];
+					}
+				}
+				if (!mesh.is_boundary(omega[j]))
+					A_data[(rowIdx * 2 + Ui) * rowNum*2 + matrixIdx[j] * 2 + Ui] += -1 * gradVFunc[j] * L;
+			}
+			b_data[(rowIdx * 2 + Ui)] = -sumRight;
+			rowIdx++;
+
+		}
 	}
-	qDebug() << "GRADIENT";
-	for (int i = 0; i < mesh.n_vertices(); i++)
+	auto A = gsl_matrix_view_array(A_data, rowNum*2, rowNum*2);
+	auto b = gsl_vector_view_array(b_data, rowNum*2);
+	gsl_vector* x = gsl_vector_alloc(rowNum*2);
+	gsl_permutation * perm = gsl_permutation_alloc(rowNum*2);
+
+	// Decompose A into the LU form:
+	int signum;       // Sign of the permutation
+	qDebug() << "LU decomp";
+	gsl_linalg_LU_decomp(&A.matrix, perm, &signum);
+	// Solve the linear system
+	qDebug() << "LU solve";
+	gsl_linalg_LU_solve(&A.matrix, perm, &b.vector, x);
+
+	double* A_data2 = new double[rowNum * 4 *rowNum * 4];
+	double* b_data2 = new double[rowNum * 4];
+	gsl_vector* x2 = gsl_vector_alloc(rowNum * 4);
+	gsl_permutation* perm2 = gsl_permutation_alloc(rowNum * 4);
+
+	for (size_t iter = 0; iter < iterations; iter++)
 	{
-		if (fabs(gradVFunc[i]) > 0.0001)
-			qDebug() << i << ": "<< gradVFunc[i] << " ";
+		for (size_t i = 0; i < rowNum * 4; i++)
+		{
+			for (size_t j = 0; j < rowNum * 4; j++)
+			{
+				if (i < rowNum * 2 && j < rowNum * 2) {
+					A_data2[i * rowNum * 4 + j] = A_data[i * rowNum * 2 + j];
+					b_data2[i] = b_data[i];
+				}
+				else if (i < rowNum * 2 && j >= rowNum * 2) {
+					if (i == j - rowNum * 2) {
+						A_data2[i * rowNum * 4 + j] = iter == 0 ? x->data[i] : x2->data[i];
+					}
+					else
+						A_data2[i * rowNum * 4 + j] = 0;
+				}
+				else if (i >= rowNum * 2 && j < rowNum * 2) {
+					if (i - rowNum * 2 == j)
+						A_data2[i * rowNum * 4 + j] = iter == 0 ? x->data[j] : x2->data[j];
+					else
+						A_data2[i * rowNum * 4 + j] = 0;
+					b_data2[i] = 1;
+				}
+				else if (i >= rowNum * 2 && j >= rowNum * 2) {
+					A_data2[i * rowNum * 4 + j] = 0;
+				}
+			}
+		}
+		auto A2 = gsl_matrix_view_array(A_data2, rowNum * 4, rowNum * 4);
+		auto b2 = gsl_vector_view_array(b_data2, rowNum * 4);
+
+
+		// Decompose A into the LU form:
+		int signum2;       // Sign of the permutation
+		qDebug() << "LU decomp";
+		gsl_linalg_LU_decomp(&A2.matrix, perm2, &signum2);
+		// Solve the linear system
+		qDebug() << "LU solve";
+		gsl_linalg_LU_solve(&A2.matrix, perm2, &b2.vector, x2);
 	}
+	
+
+	for (size_t Ui = 0; Ui < 2; Ui++)
+	{
+		for (size_t i = 0; i < mesh.n_vertices(); i++)
+		{
+			if (!mesh.is_boundary(omega[i])) {
+				mesh.data(omega[i]).u[Ui] = x2->data[matrixIdx[i] * 2 + Ui];
+			}
+		}
+	}
+	gsl_vector_free(x2);
+	gsl_permutation_free(perm2);
+	gsl_vector_free(x);
+	gsl_permutation_free(perm);
+
 	delete[] omega;
 	delete[] vFunc;
 	delete[] gradVFunc;
+	delete[] uFunc;
+	delete[] gradUFunc;
+	delete[] u0Func;
+	delete[] gradU0Func;
+	//delete[] uCoefficient;
+	delete[] A_data;
+	delete[] b_data;
+	delete[] A_data2;
+	delete[] b_data2;
+	for (auto v : mesh.vertices())
+	{
+		mesh.data(v).u = mesh.data(v).u.normalize();
+	}
 }
 
-void MyViewer::calculateGrad(MyMesh::VertexHandle* omega,  double* func, double* gradFunc) {
+void MyViewer::calculateGrad(MyMesh::VertexHandle* omega, std::vector<int>* neighbours, double* func, double* gradFunc) {
 
 	for (size_t i = 0; i < mesh.n_vertices(); i++)
 	{
-		std::vector<int> neighbours;
-		for (size_t j = 0; j < mesh.n_vertices(); j++)
-		{
-			if (i != j && hasCommonEdge(omega[i],omega[j])) {
-				neighbours.push_back(j);
-			}
-		}
 		double grad = 0;
-		for (auto n : neighbours) {
+		for (auto n : neighbours[i]) {
 			grad += (func[n] - func[i]) / (mesh.point(omega[n]) - mesh.point(omega[i])).length();
 		}
 		gradFunc[i] = grad;
 	}
+}
+std::vector<int> MyViewer::getNeighbours(MyMesh::VertexHandle* omega, int idx) {
+	std::vector<int> neighbours;
+	for (size_t j = 0; j < mesh.n_vertices(); j++)
+	{
+		if (idx != j && hasCommonEdge(omega[idx], omega[j])) {
+			neighbours.push_back(j);
+		}
+	}
+	return neighbours;
+}
+double MyViewer::calculateL(MyMesh::VertexHandle* omega, std::vector<int>* neighbours, int idx) {
+	double L = 0;
+	for (auto n : neighbours[idx]) {
+		L += 1 / ((mesh.point(omega[n]) - mesh.point(omega[idx])).length());
+	}
+	return L;
+}
+void MyViewer::buildNeighbours(MyMesh::VertexHandle* omega, std::vector<int>* neighbours) {
+	for (size_t i = 0; i < mesh.n_vertices(); i++)
+	{
+		neighbours[i] = getNeighbours(omega, i);
+	}
+}
+void MyViewer::findSingularities() {
+
+	double* A_data = new double[3 * 3];
+	double* b_data = new double[3];
+
+	gsl_vector* x = gsl_vector_alloc(3);
+	gsl_permutation* perm = gsl_permutation_alloc(3);
+	for (auto f : mesh.faces()) {
+		mesh.data(f).hasSingularity = false;
+		MyMesh::VertexHandle v1;
+		MyMesh::VertexHandle v2;
+		MyMesh::VertexHandle v3;
+		int i = 0;
+		for (auto v : mesh.fv_range(f))
+		{
+			switch (i)
+			{
+			case 0 :
+				v1 = v;
+				i++;
+				break;
+			case 1:
+				v2 = v;
+				i++;
+				break;
+			case 2:
+				v3 = v;
+				i++;
+				break;
+			}
+		}
+		if (i < 3)
+			throw;
+		//Row 0
+		A_data[0] = 1;
+		A_data[1] = 1;
+		A_data[2] = 1;
+		b_data[0] = 1;
+
+		//Row 1
+		A_data[3] = mesh.data(v1).u[0];
+		A_data[4] = mesh.data(v2).u[0];
+		A_data[5] = mesh.data(v3).u[0];
+		b_data[1] = 0;
+
+		//Row 2
+		A_data[6] = mesh.data(v1).u[1];
+		A_data[7] = mesh.data(v2).u[1];
+		A_data[8] = mesh.data(v3).u[1];
+		b_data[2] = 0;
+		auto A = gsl_matrix_view_array(A_data, 3, 3);
+		auto b = gsl_vector_view_array(b_data, 3);
+
+
+		// Decompose A into the LU form:
+		int signum;       // Sign of the permutation
+		gsl_linalg_LU_decomp(&A.matrix, perm, &signum);
+		double det = gsl_linalg_LU_det(&A.matrix, signum);
+		//qDebug() << det;
+		if (fabs(det) > 0.00001) {
+			gsl_linalg_LU_solve(&A.matrix, perm, &b.vector, x);
+			if (x->data[0] > 0 && x->data[1] > 0 && x->data[2] > 0) {
+				//qDebug() << "w1: " << x->data[0] << "w2: " << x->data[1] << "w3: " << x->data[2];
+				//qDebug() << "x: " << mesh.data(v1).u[0] * x->data[0] + mesh.data(v2).u[0] * x->data[1] + mesh.data(v3).u[0] * x->data[2];
+				//qDebug() << "y: " << mesh.data(v1).u[1] * x->data[0] + mesh.data(v2).u[1] * x->data[1] + mesh.data(v3).u[1] * x->data[2];
+				//mesh.data(f).tagged2 = true;
+				MyMesh::Point p = mesh.point(v1) * x->data[0] + mesh.point(v2) * x->data[1] + mesh.point(v3) * x->data[2];
+				qDebug() << "sing x: " << p[0] << " y: " << p[1];
+				//for (double yd = -0.2; yd <= 0.2; yd+=0.1)
+				//{
+				//	double w_array[3];
+				//	MyMesh::VertexHandle v_array[3];
+				//	Vector temp = p;
+				//	temp[1] += yd;
+				//	MyMesh::FaceHandle f = getFace(temp, w_array, v_array);
+				//	Vector Utemp = Vector(0, 0, 0);
+				//	for (size_t i = 0; i < 3; i++)
+				//	{
+				//		Utemp += w_array[i] * mesh.data(v_array[i]).u;
+				//	}
+				//	qDebug() << "yd : " << yd << " U: x:" << Utemp[0] << " y: " << Utemp[1];
+				//}
+				singularities.push_back(Singularity(p,f));
+				mesh.data(f).hasSingularity = true;
+			}
+		}
+
+		
+
+	}
+	gsl_vector_free(x);
+	gsl_permutation_free(perm);
+	delete[] A_data;
+	delete[] b_data;
+}
+
+void MyViewer::findSeparatrices() {
+
+	for (auto sin : singularities) {
+		MyMesh::VertexHandle vertices[6];
+		MyMesh::VertexHandle v1;
+		MyMesh::VertexHandle v2;
+		MyMesh::VertexHandle v3;
+		int i = 0;
+		for (auto v : mesh.fv_range(sin.f))
+		{
+			switch (i)
+			{
+			case 0:
+				v1 = v;
+				i++;
+				break;
+			case 1:
+				v2 = v;
+				i++;
+				break;
+			case 2:
+				v3 = v;
+				i++;
+				break;
+			}
+		}
+		if (i < 3)
+			throw;
+		vertices[0] = v1; vertices[1] = v2; vertices[2] = v1; vertices[3] = v3; vertices[4] = v2; vertices[5] = v3;
+		for (size_t vi = 0; vi < 6; vi+=2)
+		{
+			double minDot[4];
+			minDot[0] = 999999999;
+			minDot[1] = 999999999;
+			minDot[2] = 999999999;
+			minDot[3] = 999999999;
+
+			double minW[4];
+			minW[0] = -1;
+			minW[1] = -1;
+			minW[2] = -1;
+			minW[3] = -1;
+
+			Vector minCross[4];
+			for (double w = 0; w < 1.0; w+=0.001)
+			{
+				MyMesh::Point P = mesh.point(vertices[vi]) * w + (1-w) * mesh.point(vertices[vi+1]);
+				Vector UP = (P - sin.pos).normalize();
+				Vector U = mesh.data(vertices[vi]).u * w + (1 - w) * mesh.data(vertices[vi + 1]).u;
+				U = U.normalize();
+				Vector cross[4];
+				cross[0] = (calculateCrossFromU(U)[0]).normalize();
+				cross[1] = (calculateCrossFromU(U)[1]).normalize();
+				cross[2] = cross[0] * -1;
+				cross[3] = cross[1] * -1;
+
+				for (size_t i = 0; i < 4; i++)
+				{
+					if ((1 - dot(cross[i], UP)) < minDot[i]) {
+						minDot[i] = (1 - dot(cross[i], UP));
+						minW[i] = w;
+						minCross[i] = cross[i];
+					}
+				}
+				{
+				
+				//MyMesh::Point P = mesh.point(vertices[vi]) * w + (1-w) * mesh.point(vertices[vi+1]);
+				//Vector UP = (P - sin.pos).normalize();
+				//Vector U = mesh.data(vertices[vi]).u * w + (1 - w) * mesh.data(vertices[vi + 1]).u;
+				//U = U.normalize();
+				//Vector cross1[4];
+				//cross1[0] = (calculateCrossFromU(mesh.data(vertices[vi]).u)[0]).normalize();
+				//cross1[1] = (calculateCrossFromU(mesh.data(vertices[vi]).u)[1]).normalize();
+				//cross1[2] = cross1[0] * -1;
+				//cross1[3] = cross1[1] * -1;
+				//Vector cross2[4];
+				//cross2[0] = (calculateCrossFromU(mesh.data(vertices[vi + 1]).u)[0]).normalize();
+				//cross2[1] = (calculateCrossFromU(mesh.data(vertices[vi + 1]).u)[1]).normalize();
+				//cross2[2] = cross2[0] * -1;
+				//cross2[3] = cross2[1] * -1;
+				//Vector cross[4];
+				//cross[0] = (w * cross1[0] + (1 - w) * cross2[0]).normalize();
+				//cross[1] = (w * cross1[1] + (1 - w) * cross2[1]).normalize();
+				//cross[2] = (w * cross1[2] + (1 - w) * cross2[2]).normalize();
+				//cross[3] = (w * cross1[3] + (1 - w) * cross2[3]).normalize();
+
+				//for (size_t i = 0; i < 4; i++)
+				//{
+				//	if ((1 - dot(cross[i], UP)) < minDot[i]) {
+				//		minDot[i] = (1 - dot(cross[i], UP));
+				//		minW[i] = w;
+				//		minCross[i] = cross[i];
+				//	}
+				//}
+				
+				}
+			}
+			for (size_t i = 0; i < 4; i++)
+			{
+				if (minDot[i] < 0.00001) {
+					std::vector<Vector> separatrice;
+					separatrice.push_back(sin.pos);
+					MyMesh::Point P = mesh.point(vertices[vi]) * minW[i] + (1 - minW[i]) * mesh.point(vertices[vi + 1]);
+					separatrice.push_back(P);
+					//separatrice.push_back(P + minCross[i] * 5);
+
+					buildSeparatrices(&separatrice, minCross[i], vertices[vi], vertices[vi + 1], sin.f);
+					separatrices.push_back(separatrice);
+				}
+			}
+		}
+		/*for (size_t vi = 0; vi < 6; vi+=2)
+		{
+			Vector CFS1[2];
+			Vector CFS2[2];
+			CFS1[0] = calculateCrossFromU(mesh.data(vertices[vi]).u)[0].normalize();
+			CFS1[1] = calculateCrossFromU(mesh.data(vertices[vi]).u)[1].normalize();
+			CFS2[0] = calculateCrossFromU(mesh.data(vertices[vi +1]).u)[0].normalize();
+			CFS2[1] = calculateCrossFromU(mesh.data(vertices[vi +1]).u)[1].normalize();
+			for (size_t i = 0; i < 2; i++)
+			{
+				double a = mesh.point(vertices[vi +1])[0] - sin.pos[0];
+				double b = CFS2[i][0];
+				double c = mesh.point(vertices[vi])[0] - mesh.point(vertices[vi +1])[0];
+				double d = CFS1[i][0] - CFS2[i][0];
+
+				double e = mesh.point(vertices[vi])[1] - mesh.point(vertices[vi +1])[1];
+				double f = CFS1[i][1] - CFS2[i][1];
+				double g = mesh.point(vertices[vi +1])[1] - sin.pos[1];
+				double h = CFS2[i][1];
+
+				double A = a * e - g * c;
+				double B = h * c + g * d - b * e - f * a;
+				double C = -h * d + f * b;
+				double det = B * B - 4 * A * C;
+				if (fabs(det) < 0.001) {
+					double k1 = -B / (2 * A);
+					//qDebug() << "k1: " << k1;
+					double w = (-k1 * a + b) / (k1 * c - d);
+					//qDebug() << "w: " << w;
+					if (w >= 0 && w <= 1) {
+						std::vector<Vector> separatrice;
+						separatrice.push_back(sin.pos);
+						Vector temp = mesh.point(vertices[vi]) * w + mesh.point(vertices[vi +1]) * (1 - w);
+						Vector dirtemp = CFS1[i] * w + CFS2[i] * (1 - w);
+						dirtemp = dirtemp.normalize();
+						if (k1 < 0)
+							dirtemp = dirtemp.normalize()*-1;
+						separatrice.push_back(temp);
+						buildSeparatrices(&separatrice, dirtemp, vertices[vi], vertices[vi + 1], sin.f);
+						separatrices.push_back(separatrice);
+					}
+				}
+				else if (det > 0) {
+					double k1 = (-B + sqrt(det)) / (2 * A);
+					double k2 = (-B - sqrt(det)) / (2 * A);
+					//qDebug() << "k1: " << k1 << "k2: " << k2;
+					double w1 = (-k1 * a + b) / (k1 * c - d);
+					double w2 = (-k2 * a + b) / (k2 * c - d);
+					//qDebug() << "w1: " << w1 << " w2: " << w2;
+					if (w1 >= 0 && w1 <= 1) {
+						std::vector<Vector> separatrice;
+						separatrice.push_back(sin.pos);
+						Vector temp = mesh.point(vertices[vi]) * w1 + mesh.point(vertices[vi +1]) * (1 - w1);
+						Vector dirtemp = CFS1[i] * w1 + CFS2[i] * (1 - w1);
+						dirtemp = dirtemp.normalize();
+						if (k1 < 0)
+							dirtemp = dirtemp.normalize()*-1;
+						separatrice.push_back(temp);
+						//Vector U = w1 * mesh.data(vertices[vi]).u + (1 - w1) * mesh.data(vertices[vi + 1]).u;
+					//	qDebug() << "dirTemp x: " << dirtemp[0] << " y: " << dirtemp[1];
+						buildSeparatrices(&separatrice, dirtemp, vertices[vi], vertices[vi+1],sin.f);
+						separatrices.push_back(separatrice);
+					}
+					if (w2 >= 0 && w2 <= 1) {
+						std::vector<Vector> separatrice;
+						separatrice.push_back(sin.pos);
+						Vector temp = mesh.point(vertices[vi]) * w2 + mesh.point(vertices[vi +1]) * (1 - w2);
+						Vector dirtemp = CFS1[i] * w2 + CFS2[i] * (1 - w2);
+						dirtemp = dirtemp.normalize();
+						if (k2 < 0)
+							dirtemp = dirtemp.normalize()*-1;
+						separatrice.push_back(temp);
+						//Vector U = w2 * mesh.data(vertices[vi]).u + (1 - w2) * mesh.data(vertices[vi + 1]).u;
+
+						//qDebug() << "dirTemp x: " << dirtemp[0] << " y: " << dirtemp[1];
+						buildSeparatrices(&separatrice, dirtemp, vertices[vi], vertices[vi + 1], sin.f);
+						separatrices.push_back(separatrice);
+					}
+				}
+			}
+		}
+		*/
+	}
+}
+void MyViewer::findSeparatrices2() {
+	double r = 0.05;
+	for (auto sing : singularities) {
+		for (double alpha = 0; alpha < 3.14159*2; alpha+=0.005)
+		{
+			Vector P = sing.pos + Vector(cos(alpha) * r, sin(alpha) * r,0);
+			double w[3];
+			MyMesh::VertexHandle v_array[3];
+			MyMesh::FaceHandle f = getFace(P, w, v_array);
+			Vector SP = P - sing.pos;
+			SP = SP.normalize();
+			Vector U = Vector(0, 0, 0);
+			for (size_t i = 0; i < 3; i++)
+			{
+				U += w[i] * mesh.data(v_array[i]).u;
+			}
+			U = U.normalize();
+			Vector cross[4];
+			cross[0] = (calculateCrossFromU(U)[0]).normalize();
+			cross[1] = (calculateCrossFromU(U)[1]).normalize();
+			cross[2] = cross[0] * -1;
+			cross[3] = cross[1] * -1;
+
+			double minDif = 99999;
+			int minIdx = 0;
+			for (size_t j = 0; j < 4; j++)
+			{
+				double temp = dot(cross[j], SP);
+				if (1 - temp < minDif) {
+					minDif = 1 - temp;
+					minIdx = j;
+				}
+			}
+			if (minDif < 0.00001) {
+				std::vector<Vector> separatrice;
+				separatrice.push_back(sing.pos);
+				separatrice.push_back(P);
+				followStreamLine(P, cross[minIdx], &separatrice, separatrices.size(),0.1,2000);
+
+				separatrices.push_back(separatrice);
+				alpha += 0.1;
+			}
+
+		}
+	}
+}
+void MyViewer::buildSeparatrices(std::vector<Vector>* separatice, Vector dir,MyMesh::VertexHandle v1, MyMesh::VertexHandle v2, MyMesh::FaceHandle f) {
+	MyMesh::VertexHandle v1_ = v1;
+	MyMesh::VertexHandle v2_ = v2;
+	Vector dir_ = dir;
+	MyMesh::FaceHandle f_ = f;
+	for (size_t i = 0; i < 1000; i++)
+	{
+
+
+		MyMesh::HalfedgeHandle h = mesh.halfedge_handle(getCommonEdge(v1_, v2_), 0);
+		if (mesh.face_handle(h) == f_)
+			h = mesh.halfedge_handle(getCommonEdge(v1_, v2_), 1);
+		MyMesh::FaceHandle nextF = mesh.face_handle(h);
+		f_ = nextF;
+		MyMesh::VertexHandle v3;
+		for (auto vertex : mesh.fv_range(nextF)) {
+			if (vertex != v1_ && vertex != v2_)
+				v3 = vertex;
+		}
+		Vector tempXin;
+		Vector tempDin;
+		MyMesh::VertexHandle tempV1;
+		MyMesh::VertexHandle tempV2;
+		findXiNext((*separatice)[separatice->size() - 1], dir_, v1_, v2_, v3, &tempXin, &tempDin, &tempV1, &tempV2);
+
+		Vector din = ((tempDin.normalize() + dir_.normalize()) / 2).normalize();
+		Vector Xin;
+		findXiNext((*separatice)[separatice->size() - 1], din, v1_, v2_, v3, &Xin, &dir_, &v1_, &v2_);
+
+		separatice->push_back(Xin);
+		if (mesh.is_boundary(v1_) && mesh.is_boundary(v2_))
+			break;
+		//if (mesh.data(f_).hasSingularity)
+		//	break;
+	}
+}
+std::vector<MyViewer::Vector> MyViewer::calculateCrossFromU(Vector u) {
+	std::vector<MyViewer::Vector> returnV;
+	double atang = atan2(u[1], u[0]);
+	if (atang < 0)
+		atang = 3.14159 * 2 + atang;
+	double theta = (atang) / 4.0;
+	returnV.push_back(Vector(cos(theta), sin(theta), 0.0));
+	returnV.push_back(Vector(cos(theta + 3.14159 / 2), sin(theta + 3.14159 / 2), 0.0) );
+	return returnV;
+}
+MyViewer::Vector MyViewer::findClosestCrossVector(Vector di, Vector Xi, MyMesh::VertexHandle v1, MyMesh::VertexHandle v2) {
+	double w;
+	if ((mesh.point(v1)[0] - mesh.point(v2)[0]) != 0)
+		w = (Xi[0] - mesh.point(v2)[0]) / (mesh.point(v1)[0] - mesh.point(v2)[0]);
+	else
+		w = (Xi[1] - mesh.point(v2)[1]) / (mesh.point(v1)[1] - mesh.point(v2)[1]);
+	Vector U = w * mesh.data(v1).u + (1 - w) * mesh.data(v2).u;
+	U = U.normalize();
+	Vector cross[4];
+	cross[0] = (calculateCrossFromU(U)[0]).normalize();
+	cross[1] = (calculateCrossFromU(U)[1]).normalize();
+	cross[2] = cross[0] * -1;
+	cross[3] = cross[1] * -1;
+
+	//qDebug() << "cross1 x: " << cross[0][0] << " y: " << cross[0][1];
+	//qDebug() << "cross2 x: " << cross[1][0] << " y: " << cross[1][1];
+	//qDebug() << "cross3 x: " << cross[2][0] << " y: " << cross[2][1];
+	//qDebug() << "cross4 x: " << cross[3][0] << " y: " << cross[3][1];
+	//qDebug() << "#########################";
+	di = di.normalize();
+	double minDif = 99999;
+	int minIdx = 0;
+	for (size_t i = 0; i < 4; i++)
+	{
+		double temp = dot(cross[i], di);
+		if (1 - temp < minDif) {
+			minDif = 1 - temp;
+			minIdx = i;
+		}
+	}
+	Vector Vdi = cross[minIdx];
+	return Vdi;
+}
+void MyViewer::findXiNext(Vector Xi, Vector di, MyMesh::VertexHandle v1, MyMesh::VertexHandle v2, MyMesh::VertexHandle v3, Vector* Xin, Vector* din, MyMesh::VertexHandle* newV1, MyMesh::VertexHandle* newV2) {
+	Vector Vdi = findClosestCrossVector(di, Xi, v1, v2);
+
+	//separatice->push_back((*separatice)[separatice->size() - 1] + Vdi * 5);
+	double a = (mesh.point(v1)[0] - mesh.point(v3)[0]) / Vdi[0];
+	double b = (mesh.point(v3)[0] - Xi[0]) / Vdi[0];
+	double w = (mesh.point(v3)[1] - Xi[1] - b * Vdi[1]) / (Vdi[1] * a - mesh.point(v1)[1] + mesh.point(v3)[1]);
+	if (w >= 0 && w <= 1) {
+		*Xin = (mesh.point(v1) * w + (1 - w) * mesh.point(v3));
+		*din = findClosestCrossVector(di, *Xin, v1, v3);
+		*newV1 = v1;
+		*newV2 = v3;
+	}
+	else {
+		a = (mesh.point(v2)[0] - mesh.point(v3)[0]) / Vdi[0];
+		b = (mesh.point(v3)[0] - Xi[0]) / Vdi[0];
+		double w = (mesh.point(v3)[1] - Xi[1] - b * Vdi[1]) / (Vdi[1] * a - mesh.point(v2)[1] + mesh.point(v3)[1]);
+		if (w >= 0 && w <= 1) {
+			*Xin = (mesh.point(v2) * w + (1 - w) * mesh.point(v3));
+			*din = findClosestCrossVector(di, *Xin, v2, v3);
+			*newV1 = v2;
+			*newV2 = v3;
+		}
+	}
+}
+void MyViewer::buildStreamLine(Vector v) {
+	double w[3];
+	MyMesh::VertexHandle v_array[3];
+	MyMesh::FaceHandle f = getFace(v, w, v_array);
+
+	//singularities.push_back(Singularity(v, f));
+	double step = 0.5;
+	Vector U = Vector(0, 0, 0);
+	for (size_t i = 0; i < 3; i++)
+	{
+		U += w[i] * mesh.data(v_array[i]).u;
+	}
+	U = U.normalize();
+	Vector cross[4];
+	cross[0] = (calculateCrossFromU(U)[0]).normalize();
+	cross[1] = (calculateCrossFromU(U)[1]).normalize();
+	cross[2] = cross[0] * -1;
+	cross[3] = cross[1] * -1;
+	for (int i = 0; i < 4; i++) {
+		std::vector<Vector> separatrice;
+		separatrice.push_back(v);
+
+		Vector prevDir = cross[i];
+		Vector vtemp = v + cross[i] * step;
+		separatrice.push_back(vtemp);
+		followStreamLine(vtemp, cross[i], &separatrice,-1);
+		double wtemp[3];
+		MyMesh::VertexHandle v_arraytemp[3];
+
+		separatrices2.push_back(separatrice);
+	}
+
+}
+MyViewer::MyMesh::FaceHandle MyViewer::getFace(Vector v, double* w, MyMesh::VertexHandle* v_array) {
+	double* A_data = new double[3 * 3];
+	double* b_data = new double[3];
+
+	gsl_vector* x = gsl_vector_alloc(3);
+	gsl_permutation* perm = gsl_permutation_alloc(3);
+	for (auto f : mesh.faces()) {
+		mesh.data(f).hasSingularity = false;
+		MyMesh::VertexHandle v1;
+		MyMesh::VertexHandle v2;
+		MyMesh::VertexHandle v3;
+		int i = 0;
+		for (auto v : mesh.fv_range(f))
+		{
+			switch (i)
+			{
+			case 0:
+				v1 = v;
+				i++;
+				break;
+			case 1:
+				v2 = v;
+				i++;
+				break;
+			case 2:
+				v3 = v;
+				i++;
+				break;
+			}
+		}
+		if (i < 3)
+			throw;
+		//Row 0
+		A_data[0] = 1;
+		A_data[1] = 1;
+		A_data[2] = 1;
+		b_data[0] = 1;
+
+		//Row 1
+		A_data[3] = mesh.point(v1)[0];
+		A_data[4] = mesh.point(v2)[0];
+		A_data[5] = mesh.point(v3)[0];
+		b_data[1] = v[0];
+
+		//Row 2
+		A_data[6] = mesh.point(v1)[1];
+		A_data[7] = mesh.point(v2)[1];
+		A_data[8] = mesh.point(v3)[1];
+		b_data[2] = v[1];
+		auto A = gsl_matrix_view_array(A_data, 3, 3);
+		auto b = gsl_vector_view_array(b_data, 3);
+
+
+		// Decompose A into the LU form:
+		int signum;       // Sign of the permutation
+		gsl_linalg_LU_decomp(&A.matrix, perm, &signum);
+		double det = gsl_linalg_LU_det(&A.matrix, signum);
+		//qDebug() << det;
+		if (fabs(det) > 0.00001) {
+			gsl_linalg_LU_solve(&A.matrix, perm, &b.vector, x);
+
+			if (x->data[0] > -0.0001 && x->data[1] > -0.0001 && x->data[2] > -0.0001) {
+				w[0] = x->data[0];
+				w[1] = x->data[1];
+				w[2] = x->data[2];
+				v_array[0] = v1;
+				v_array[1] = v2;
+				v_array[2] = v3;
+				gsl_vector_free(x);
+				gsl_permutation_free(perm);
+				delete[] A_data;
+				delete[] b_data;
+				return f;
+			}
+		}
+
+
+
+	}
+	gsl_vector_free(x);
+	gsl_permutation_free(perm);
+	delete[] A_data;
+	delete[] b_data;
+	w[0] = -1;
+	w[1] = -1;
+	w[2] = -1;
+	return mesh.faces().begin();
+}
+
+void MyViewer::followStreamLine(Vector v, Vector prevDir, std::vector<Vector>* streamline, int separatriceIdx, double step, double iterations) {
+	double wtemp[3];
+	MyMesh::VertexHandle v_arraytemp[3];
+	Vector vtemp = v;
+	MyMesh::FaceHandle prevFace;
+	if (streamline->size() > 0)
+		prevFace = getFace((*streamline)[0], wtemp, v_arraytemp);
+	else
+		prevFace = getFace(v, wtemp, v_arraytemp);
+	int from = 0;
+	for (size_t j = 0; j < iterations; j++)
+	{
+		MyMesh::FaceHandle ftemp = getFace(vtemp, wtemp, v_arraytemp);
+		if (ftemp != prevFace) {
+			if (from > 0)
+				from--;
+			mesh.data(prevFace).separaticeParts.push_back(SeparatricePart(separatriceIdx, from, streamline->size()));
+			prevFace = ftemp;
+			from = streamline->size()-1;
+		}
+		if (wtemp[0] < -0.5) {
+			MyMesh::VertexHandle v1Boundary;
+			MyMesh::VertexHandle v2Boundary;
+			bool v1BoundaryFound = false;
+			for (auto v : v_arraytemp) {
+				if (mesh.is_boundary(v)) {
+					if (v1BoundaryFound)
+						v2Boundary = v;
+					else {
+						v1Boundary = v;
+						v1BoundaryFound = true;
+					}
+				}
+			}
+			Vector P;
+			if (doIntersect(mesh.point(v1Boundary),mesh.point(v2Boundary),(*streamline)[streamline->size()-2], (*streamline)[streamline->size() - 1], &P)){
+				corners.push_back(Corner(P, SeparatricePart(separatriceIdx, streamline->size() - 2, streamline->size() - 1), SeparatricePart(-1, -1, -1), true, v1Boundary, v2Boundary));
+			}
+			break;
+		}
+
+		Vector Utemp = Vector(0, 0, 0);
+		for (size_t i = 0; i < 3; i++)
+		{
+			Utemp += wtemp[i] * mesh.data(v_arraytemp[i]).u;
+		}
+		Utemp = Utemp.normalize();
+		Vector crosstemp[4];
+		crosstemp[0] = (calculateCrossFromU(Utemp)[0]).normalize();
+		crosstemp[1] = (calculateCrossFromU(Utemp)[1]).normalize();
+		crosstemp[2] = crosstemp[0] * -1;
+		crosstemp[3] = crosstemp[1] * -1;
+		prevDir = prevDir.normalize();
+		double minDif = 99999;
+		int minIdx = 0;
+		for (size_t j = 0; j < 4; j++)
+		{
+			double temp = dot(crosstemp[j], prevDir);
+			if (1 - temp < minDif) {
+				minDif = 1 - temp;
+				minIdx = j;
+			}
+		}
+		vtemp = vtemp + crosstemp[minIdx] * step;
+		streamline->push_back(vtemp);
+		prevDir = crosstemp[minIdx];
+	}
+
+}
+void MyViewer::findPartitionCorners() {
+	for (auto f : mesh.faces()) {
+		if (mesh.data(f).separaticeParts.size() > 1) {
+			//mesh.data(f).tagged2 = true;
+			for (size_t i = 0; i < mesh.data(f).separaticeParts.size(); i++)
+			{
+				int separatriceIdx = mesh.data(f).separaticeParts[i].separatriceIdx;
+				for (size_t j = 0; j < mesh.data(f).separaticeParts.size(); j++)
+				{
+
+					int separatriceIdx2 = mesh.data(f).separaticeParts[j].separatriceIdx;
+					if (i == j || (separatriceIdx == separatriceIdx2 && !(mesh.data(f).separaticeParts[i].fromI > mesh.data(f).separaticeParts[j].toI 
+																		|| mesh.data(f).separaticeParts[j].fromI > mesh.data(f).separaticeParts[i].toI)))
+						continue;
+					for (size_t s1Idx = mesh.data(f).separaticeParts[i].fromI; s1Idx < mesh.data(f).separaticeParts[i].toI-1; s1Idx++)
+					{
+						
+						for (size_t s2Idx = mesh.data(f).separaticeParts[j].fromI; s2Idx < mesh.data(f).separaticeParts[j].toI-1; s2Idx++)
+						{
+							Vector P;
+							if (doIntersect(separatrices[separatriceIdx][s1Idx], separatrices[separatriceIdx][s1Idx + 1], separatrices[separatriceIdx2][s2Idx], separatrices[separatriceIdx2][s2Idx+1], &P)) {
+								//singularities.push_back(Singularity(P,f));		
+								corners.push_back(Corner(P, SeparatricePart(separatriceIdx,s1Idx,s1Idx+1), SeparatricePart(separatriceIdx2, s2Idx, s2Idx + 1), false));
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+bool MyViewer::doIntersect(Vector p1, Vector p2, Vector p3, Vector p4, Vector* P) {
+	double t = ((p1[0] - p3[0]) * (p3[1] - p4[1]) - (p1[1] - p3[1]) * (p3[0] - p4[0]))
+		/ ((p1[0] - p2[0]) * (p3[1] - p4[1]) - (p1[1] - p2[1]) * (p3[0] - p4[0]));
+	double u = ((p2[0] - p1[0]) * (p1[1] - p3[1]) - (p2[1] - p1[1]) * (p1[0] - p3[0]))
+		/ ((p1[0] - p2[0]) * (p3[1] - p4[1]) - (p1[1] - p2[1]) * (p3[0] - p4[0]));
+
+	//qDebug() << "u: " << u << "t: " << t;
+	if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+		(*P)[0] = p1[0] + t * (p2[0] - p1[0]);
+		(*P)[1] = p1[1] + t * (p2[1] - p1[1]);
+		return true;
+	}
+	return false;
 }

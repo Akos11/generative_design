@@ -33,7 +33,7 @@
 MyViewer::MyViewer(QWidget* parent) :
 	QGLViewer(parent), model_type(ModelType::NONE),
 	mean_min(0.0), mean_max(0.0), cutoff_ratio(0.05),
-	show_control_points(true), show_solid(true), show_wireframe(false), show_constraints(false), show_partitioning(false), show_PDEu(false), show_PDEcross(false),
+	show_control_points(true), show_solid(true), show_wireframe(false), show_constraints(false), show_partitioning(false), show_PDEu(false), show_PDEcross(false), show_singularities(false), show_separatrices(false),
 	boundaryRemeshL(1.0),
 	visualization(Visualization::PLAIN), slicing_dir(0, 0, 1), slicing_scaling(1),
 	last_filename("")
@@ -677,6 +677,10 @@ void MyViewer::draw() {
 			for (auto v : mesh.fv_range(f)) {
 				//qDebug() << "Test" << i++;
 				count++;
+				//Vector colorTemp = mesh.data(v).u;
+				//colorTemp += Vector(1, 1, 0);
+				//colorTemp = colorTemp / 2;
+				//glColor3dv(colorTemp.data());
 				if (visualization == Visualization::MEAN)
 					glColor3dv(meanMapColor(mesh.data(v).mean));
 				else if (visualization == Visualization::SLICING)
@@ -819,6 +823,25 @@ void MyViewer::draw() {
 		drawPDEu();
 	if (show_PDEcross)
 		drawPDEcross();
+	glLineWidth(2.5);
+	glPointSize(8.0);
+	glBegin(GL_POINTS);
+	if (show_singularities) {
+		for (auto s : singularities)
+		{
+			glVertex3dv((s.pos + Vector(0.0, 0.0, 0.11)).data());
+		}
+		glColor3d(0, 0, 1.0);
+		for (auto c : corners)
+		{
+			glVertex3dv((c.pos + Vector(0.0, 0.0, 0.11)).data());
+		}
+	}
+	glEnd();
+	glPointSize(1.0);
+	glLineWidth(1.0);
+	if (show_separatrices)
+		drawSeparatrices();
 }
 void MyViewer::drawControlNet() const {
 	glDisable(GL_LIGHTING);
@@ -902,10 +925,10 @@ void MyViewer::drawPDEu() {
 	glLineWidth(2.0);
 	const Vec& offset = Vec(0.0, 0.0, 0.03);
 	for (auto v : mesh.vertices()) {
-		if (mesh.data(v).u.length() > 0.0) {
+		if (mesh.data(v).u.length() > 0.3) {
 			const Vec& p = Vec(mesh.point(v)) + offset;
 			const Vec& vector = Vec(mesh.data(v).u) + offset;
-			drawArrow(p, p + vector, vector.squaredNorm() / 12.0);
+			drawArrow(p, p + vector, 1 / 12.0f);// vector.squaredNorm() / 12.0);
 		}
 	}
 	glLineWidth(1.0);
@@ -940,7 +963,32 @@ void MyViewer::drawPDEcross() {
 		}
 	}
 	glLineWidth(1.0);
-	glColor3d(1.0, 0.0, 0.0);
+	glColor3d(0.0, 0.0, 0.0);
+}
+void MyViewer::drawSeparatrices() {
+	glLineWidth(3.0);
+	glColor3d(1.0, 0.0, 1.0);
+	for (auto sep : separatrices) {
+		glBegin(GL_LINE_STRIP);
+		for (auto p : sep) {
+			glVertex3dv((p + Vector(0.0, 0.0, 0.11)).data());
+		}
+		glEnd();
+	}
+	glColor3d(0.0, 0.0, 0.0);
+	glLineWidth(1.0);
+
+	glLineWidth(3.0);
+	glColor3d(1.0, 1.0, 0.0);
+	for (auto sep : separatrices2) {
+		glBegin(GL_LINE_STRIP);
+		for (auto p : sep) {
+			glVertex3dv((p + Vector(0.0, 0.0, 0.11)).data());
+		}
+		glEnd();
+	}
+	glColor3d(0.0, 0.0, 0.0);
+	glLineWidth(1.0);
 }
 void MyViewer::postSelection(const QPoint& p) {
 	int sel = selectedName();
@@ -977,6 +1025,9 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 		switch (e->key()) {
 		case Qt::Key_R:
 			quadPartition.clear();
+			singularities.clear();
+			separatrices.clear();
+			corners.clear();
 			if (model_type == ModelType::MESH)
 				openMesh(last_filename, false);
 			else if (model_type == ModelType::BEZIER_SURFACE)
@@ -1063,17 +1114,37 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			break;
 
 		case Qt::Key_7:
-			initVFunction();
+			initVFunction(6);
 			update();
 			break;
 
 		case Qt::Key_8:
+			findSingularities();
+			findSeparatrices2();
+			show_singularities = true;
+			show_separatrices = true;
 			update();
-			//partition();
 			break;
 		case Qt::Key_9:
-			partition();
-			//eliminate2and4ValenceBounradies();
+			findPartitionCorners();
+
+			update();
+			break;
+		case Qt::Key_T:
+			for (size_t i = 18; i <25; i++)
+			{
+				buildStreamLine(Vector(0.2, i, 0));
+			}
+			//buildStreamLine(Vector(0, 28.2, 0));
+			//buildStreamLine(Vector(0, 27.0, 0));
+			//buildStreamLine(Vector(0, 26.5, 0));
+			//buildStreamLine(Vector(0, 25.5, 0));
+			//buildStreamLine(Vector(0, 24.5, 0));
+			//buildStreamLine(Vector(0, 23.5, 0));
+			//buildStreamLine(Vector (0,23.9,0));
+			//buildStreamLine(Vector (0,22.9,0));
+			//buildStreamLine(Vector (0,20.9,0));
+			//buildStreamLine(Vector (0,13.9,0));
 			update();
 			break;
 		default:

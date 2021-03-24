@@ -63,6 +63,13 @@ private:
 		bool hasPrev;
 		OpenMesh::VertexHandle prevVertex;
 	};
+	struct SeparatricePart {
+		int separatriceIdx;
+		int fromI;
+		int toI;
+		SeparatricePart(int separatriceIdx_, int fromI_, int toI_) : separatriceIdx(separatriceIdx_),fromI(fromI_), toI(toI_) {}
+	};
+
 	struct MyTraits : public OpenMesh::DefaultTraits {
 		using Point = OpenMesh::Vec3d; // the default would be Vec3f
 		using Normal = OpenMesh::Vec3d;
@@ -86,12 +93,24 @@ private:
 			bool tagged2;
 			bool hasPrev;
 			OpenMesh::FaceHandle prevFace;
+			bool hasSingularity;
+			std::vector<SeparatricePart> separaticeParts;
 		};
 	};
 	using MyMesh = OpenMesh::TriMesh_ArrayKernelT<MyTraits>;
 	using Vector = OpenMesh::VectorT<double, 3>;
 	class generativeDesign;
-
+	struct Corner {
+		Vector pos;
+		SeparatricePart separatrice1;
+		SeparatricePart separatrice2;
+		bool boundary;
+		MyMesh::VertexHandle boundaryV1;
+		MyMesh::VertexHandle boundaryV2;
+		Corner(Vector pos_, SeparatricePart separatrice1_, SeparatricePart separatrice2_, bool boundary_, MyMesh::VertexHandle boundaryV1_ = MyMesh::VertexHandle(), MyMesh::VertexHandle boundaryV2_ = MyMesh::VertexHandle())
+			: pos(pos_), separatrice1(separatrice1_), separatrice2(separatrice2_),boundaryV1(boundaryV1_), boundaryV2(boundaryV2_) {}
+	};
+	std::vector<Corner> corners;
 	// Mesh
 	void updateMesh(bool update_mean_range = true);
 	void updateVertexNormals();
@@ -147,8 +166,25 @@ private:
 		void initiateBoundaryConstraints(double angleThreshold);
 		void drawPDEu();
 		void drawPDEcross();
-		void initVFunction();
-		void calculateGrad(MyMesh::VertexHandle* omega, double* func, double* gradFunc);
+		void initVFunction(int iterations);
+		void buildNeighbours(MyMesh::VertexHandle* omega, std::vector<int>* neighbours);
+		void calculateGrad(MyMesh::VertexHandle* omega, std::vector<int>* neighbours, double* func, double* gradFunc);
+		std::vector<int> getNeighbours(MyMesh::VertexHandle* omega, int idx);
+		double calculateL(MyMesh::VertexHandle* omega, std::vector<int>* neighbours, int idx);
+
+		void findSingularities();
+		void findSeparatrices();
+		void findSeparatrices2();
+		void followStreamLine(Vector v, Vector prevDir, std::vector<Vector>* streamline,int separatriceIdx, double step = 0.5, double iterations = 2000);
+		void buildSeparatrices(std::vector<Vector>* separatice,Vector dir, MyMesh::VertexHandle v1, MyMesh::VertexHandle v2, MyMesh::FaceHandle f);
+		void drawSeparatrices();
+		void findXiNext(Vector Xi, Vector di, MyMesh::VertexHandle v1, MyMesh::VertexHandle v2, MyMesh::VertexHandle v3, Vector* Xin, Vector* din, MyMesh::VertexHandle* newV1, MyMesh::VertexHandle* newV2);
+		std::vector<Vector> calculateCrossFromU(Vector u);
+		Vector findClosestCrossVector(Vector di, Vector Xi, MyMesh::VertexHandle v1, MyMesh::VertexHandle v2);
+		void buildStreamLine(Vector v);
+		MyMesh::FaceHandle getFace(Vector v, double* w, MyMesh::VertexHandle* v_array);
+		void findPartitionCorners();
+		bool doIntersect(Vector x1, Vector x2, Vector x3, Vector x4, Vector* P);
 	bool is_collapse_ok2(MyMesh::HalfedgeHandle v0v1);
 	//////////////////////
 	// Member variables //
@@ -162,6 +198,14 @@ private:
 	MyMesh keepInContsraint;
 	MyMesh keepOutConstraint;
 
+	struct Singularity {
+		Vector pos;
+		MyMesh::FaceHandle f;
+		Singularity(Vector pos_, MyMesh::FaceHandle f_) : pos(pos_), f(f_) {}
+	};
+	std::vector<Singularity> singularities;
+	std::vector<std::vector<Vector>> separatrices;
+	std::vector<std::vector<Vector>> separatrices2;
 	OpenMesh::PolyMesh_ArrayKernelT<MyTraits> quadPartition;
 	// Bezier
 	size_t degree[2];
@@ -172,7 +216,7 @@ private:
 
 	// Visualization
 	double mean_min, mean_max, cutoff_ratio;
-	bool show_control_points, show_solid, show_wireframe, show_constraints, show_partitioning, show_PDEu, show_PDEcross;
+	bool show_control_points, show_solid, show_wireframe, show_constraints, show_partitioning, show_PDEu, show_PDEcross, show_singularities, show_separatrices;
 	double boundaryRemeshL;
 	enum class Visualization { PLAIN, MEAN, SLICING, ISOPHOTES } visualization;
 	GLuint isophote_texture, environment_texture, current_isophote_texture, slicing_texture;
