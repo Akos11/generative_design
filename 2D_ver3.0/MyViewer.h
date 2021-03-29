@@ -67,7 +67,11 @@ private:
 		int separatriceIdx;
 		int fromI;
 		int toI;
-		SeparatricePart(int separatriceIdx_, int fromI_, int toI_) : separatriceIdx(separatriceIdx_),fromI(fromI_), toI(toI_) {}
+		double t;
+		SeparatricePart(int separatriceIdx_, int fromI_, int toI_, double t_ = 0) : separatriceIdx(separatriceIdx_),fromI(fromI_), toI(toI_), t(t_) {}
+		bool operator==(const SeparatricePart& rhs) {
+			return (separatriceIdx == rhs.separatriceIdx && fromI == rhs.fromI && toI == rhs.toI);
+		}
 	};
 
 	struct MyTraits : public OpenMesh::DefaultTraits {
@@ -83,10 +87,12 @@ private:
 		  double angle;
 		  int idx;
 		  OpenMesh::Vec3d u;		//directionality
+		  std::vector<int> corners;
 		};
 		EdgeTraits{
 			double squarness;
 			bool tagged;
+			std::vector<int> corners;
 		};
 		FaceTraits{
 			bool tagged;
@@ -102,13 +108,16 @@ private:
 	class generativeDesign;
 	struct Corner {
 		Vector pos;
-		SeparatricePart separatrice1;
-		SeparatricePart separatrice2;
+		//SeparatricePart separatrice1;
+		std::vector<SeparatricePart> separatrices;
+		//SeparatricePart separatrice2;
 		bool boundary;
 		MyMesh::VertexHandle boundaryV1;
 		MyMesh::VertexHandle boundaryV2;
-		Corner(Vector pos_, SeparatricePart separatrice1_, SeparatricePart separatrice2_, bool boundary_, MyMesh::VertexHandle boundaryV1_ = MyMesh::VertexHandle(), MyMesh::VertexHandle boundaryV2_ = MyMesh::VertexHandle())
-			: pos(pos_), separatrice1(separatrice1_), separatrice2(separatrice2_),boundaryV1(boundaryV1_), boundaryV2(boundaryV2_) {}
+		Corner(Vector pos_, std::vector<SeparatricePart> separatrices_, bool boundary_, MyMesh::VertexHandle boundaryV1_ = MyMesh::VertexHandle(), MyMesh::VertexHandle boundaryV2_ = MyMesh::VertexHandle())
+			: pos(pos_), separatrices(separatrices_), boundary(boundary_), boundaryV1(boundaryV1_), boundaryV2(boundaryV2_) {}
+		Corner()
+			: pos(Vector(0,0,0)), separatrices(std::vector<SeparatricePart>()), boundary(false), boundaryV1(MyMesh::VertexHandle()), boundaryV2(MyMesh::VertexHandle()) {}
 	};
 	std::vector<Corner> corners;
 	// Mesh
@@ -176,6 +185,7 @@ private:
 		void findSeparatrices();
 		void findSeparatrices2();
 		void followStreamLine(Vector v, Vector prevDir, std::vector<Vector>* streamline,int separatriceIdx, double step = 0.5, double iterations = 2000);
+		void eliminateDuplicateSeparatrices(double limit);
 		void buildSeparatrices(std::vector<Vector>* separatice,Vector dir, MyMesh::VertexHandle v1, MyMesh::VertexHandle v2, MyMesh::FaceHandle f);
 		void drawSeparatrices();
 		void findXiNext(Vector Xi, Vector di, MyMesh::VertexHandle v1, MyMesh::VertexHandle v2, MyMesh::VertexHandle v3, Vector* Xin, Vector* din, MyMesh::VertexHandle* newV1, MyMesh::VertexHandle* newV2);
@@ -184,7 +194,17 @@ private:
 		void buildStreamLine(Vector v);
 		MyMesh::FaceHandle getFace(Vector v, double* w, MyMesh::VertexHandle* v_array);
 		void findPartitionCorners();
+		void eliminateDoubleCorners();
 		bool doIntersect(Vector x1, Vector x2, Vector x3, Vector x4, Vector* P);
+		double getDistance(Vector p1, Vector p2);
+		void detectRegions();
+		std::vector<std::vector<int>> getCornerNeighbours();
+		void addCornersToEdgesAndVertices();
+		std::vector<int> buildBoundaryCornerChain();
+		std::vector<int> getBoundaryNeighbourCorner(int corner, std::vector<int> boundaryCornerChain);
+		MyMesh::VertexHandle getNextBoundary(MyMesh::VertexHandle v, MyMesh::VertexHandle vPrev);
+		int findNextBoundaryCorner(MyMesh::VertexHandle boundaryV1, MyMesh::VertexHandle boundaryV2);
+		bool isLeft(Vector a, Vector b, Vector c);
 	bool is_collapse_ok2(MyMesh::HalfedgeHandle v0v1);
 	//////////////////////
 	// Member variables //
