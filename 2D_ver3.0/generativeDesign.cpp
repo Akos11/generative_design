@@ -1190,6 +1190,16 @@ void MyViewer::findSeparatrices2() {
 	//eliminateDuplicateSeparatrices(0.5);
 }
 void MyViewer::eliminateDuplicateSeparatrices(double limit) {
+	qDebug() << "BEFORE****************";
+	int tidx = 0;
+	for (auto c : corners) {
+		qDebug() << tidx << " - pos: (" << c.pos[0] << ", " << c.pos[1] << ", " << c.pos[2]
+			<< "), Boundary: " << c.boundary << ", BoundaryV1: " << c.boundaryV1.idx() << ", BoundaryV2: " << c.boundaryV2.idx();
+		for (auto sp : c.separatrices) {
+			qDebug() << "\t" << "sp index: " << sp.separatriceIdx << "fromI: " << sp.fromI << "toI: " << sp.toI << " t: " << sp.t << "sp length: " << separatrices[sp.separatriceIdx].size();
+		}
+		tidx++;
+	}
 	struct singularityPair {
 		int separatriceIdx;
 		int singularityIdx1;
@@ -1241,7 +1251,7 @@ void MyViewer::eliminateDuplicateSeparatrices(double limit) {
 		idx++;
 	}
 	for (auto singPair : singularityPairs) {
-		qDebug() << "sep Idx: " << singPair.separatriceIdx << " sep T: " << singPair.separatriceT << " sing1: " << singPair.singularityIdx1 << " sing2: " << singPair.singularityIdx2;
+		//qDebug() << "sep Idx: " << singPair.separatriceIdx << " sep T: " << singPair.separatriceT << " sing1: " << singPair.singularityIdx1 << " sing2: " << singPair.singularityIdx2;
 	}
 	for (size_t i = 0; i < singularityPairs.size(); i++)
 	{
@@ -1257,27 +1267,52 @@ void MyViewer::eliminateDuplicateSeparatrices(double limit) {
 			}
 		}
 	}
-	qDebug() << "####################";
+//	qDebug() << "####################";
 	std::vector<int> separatricesToDelete;
+	std::vector<int> cornersToDelete;
 	for (size_t i = 0; i < singularityPairs.size(); i++)
 	{
 		if (singularityPairs[i].separatriceIdx2 != -1) {
-			qDebug() << "sep Idx1: " << singularityPairs[i].separatriceIdx << " sep T: " << singularityPairs[i].separatriceT << " sing1: " << singularityPairs[i].singularityIdx1 << " sing2: " << singularityPairs[i].singularityIdx2
-				<< "sep Idx2: " << singularityPairs[i].separatriceIdx2<< " sep T2: " << singularityPairs[i].separatriceT2;
+			//qDebug() << "sep Idx1: " << singularityPairs[i].separatriceIdx << " sep T: " << singularityPairs[i].separatriceT << " sing1: " << singularityPairs[i].singularityIdx1 << " sing2: " << singularityPairs[i].singularityIdx2
+			//	<< "sep Idx2: " << singularityPairs[i].separatriceIdx2<< " sep T2: " << singularityPairs[i].separatriceT2;
 			auto startIt = separatrices[singularityPairs[i].separatriceIdx].begin() + singularityPairs[i].separatriceT + 1;
 			separatrices[singularityPairs[i].separatriceIdx].erase(startIt, separatrices[singularityPairs[i].separatriceIdx].end());
 			separatrices[singularityPairs[i].separatriceIdx][singularityPairs[i].separatriceT] = singularities[singularityPairs[i].singularityIdx2].pos;
 			separatricesToDelete.push_back(singularityPairs[i].separatriceIdx2);
-			if (singularityPairs[i].separatriceT == 0)
-				separatricesToDelete.push_back(singularityPairs[i].separatriceIdx);
-
+			qDebug() << "Sep edit: " << singularityPairs[i].separatriceIdx;
+			if (singularityPairs[i].separatriceT == 0 || separatrices[singularityPairs[i].separatriceIdx].size() == 0)
+				separatricesToDelete.push_back(singularityPairs[i].separatriceIdx);		
 		}
 	}
 	std::sort(separatricesToDelete.begin(), separatricesToDelete.end(), std::greater<int>());
 	separatricesToDelete.erase(std::unique(separatricesToDelete.begin(), separatricesToDelete.end()), separatricesToDelete.end());
+	//std::vector<int> cornersToDelete;
 	for (auto d : separatricesToDelete) {
 		qDebug() << "Delete: " << d;
 		separatrices.erase(separatrices.begin() + d);
+		for (size_t cornerIdx = 0; cornerIdx < corners.size(); cornerIdx++)
+		{
+			std::vector<int> toDelete;
+			int tempIdx = 0;
+			for (int tempIdx = 0; tempIdx < corners[cornerIdx].separatrices.size(); tempIdx++) {
+				if (corners[cornerIdx].separatrices[tempIdx].separatriceIdx == d) {
+					toDelete.push_back(tempIdx);
+				}
+				if (corners[cornerIdx].separatrices[tempIdx].separatriceIdx > d)
+					corners[cornerIdx].separatrices[tempIdx].separatriceIdx--;
+			}
+			std::sort(toDelete.begin(), toDelete.end(), std::greater<int>());
+			for (auto cd : toDelete) {
+				corners[cornerIdx].separatrices.erase(corners[cornerIdx].separatrices.begin() + cd);
+			}
+			if (corners[cornerIdx].separatrices.size() == 0)
+				cornersToDelete.push_back(cornerIdx);
+		}
+	}
+	std::sort(cornersToDelete.begin(), cornersToDelete.end(), std::greater<int>());
+	cornersToDelete.erase(std::unique(cornersToDelete.begin(), cornersToDelete.end()), cornersToDelete.end());
+	for (auto cd : cornersToDelete) {
+		corners.erase(corners.begin() + cd);
 	}
 	std::vector<int> singularitySepNum(singularities.size());
 	for (size_t i = 0; i < singularities.size(); i++)
@@ -1289,13 +1324,13 @@ void MyViewer::eliminateDuplicateSeparatrices(double limit) {
 		for (size_t i = 0; i < singularities.size(); i++)
 		{
 			if (getDistance(singularities[i].pos, sep[0]) < 0.0001 || getDistance(singularities[i].pos, sep[sep.size()-1]) < 0.0001) {
-				if (i == 2) {
+			/*	if (i == 2) {
 					qDebug() << "sep: " << sepIdx << "Dist1: " << getDistance(singularities[i].pos, sep[0]) << " Dist2: " << getDistance(singularities[i].pos, sep[sep.size() - 1]);
 					qDebug() << "\t singularity pos: (" << singularities[i].pos[0] << ", " << singularities[i].pos[1] << ")";
 					qDebug() << "\t 1sep pos: (" << sep[0][0] << ", " << sep[0][1] << ")";
 					qDebug() << "\t 2sep pos: (" << sep[sep.size() - 1][0] << ", " << sep[sep.size() - 1][1] << ")";
 
-				}
+				}*/
 				singularitySepNum[i]++;
 			}
 		}
@@ -1304,7 +1339,7 @@ void MyViewer::eliminateDuplicateSeparatrices(double limit) {
 	std::vector<int> singularitiesToDelete;
 	for (size_t i = 0; i < singularities.size(); i++)
 	{
-		qDebug() << "i: " << i << " SepNum: " << singularitySepNum[i] << "pos: (" << singularities[i].pos[0] << ", " << singularities[i].pos[1] <<")";
+		//qDebug() << "i: " << i << " SepNum: " << singularitySepNum[i] << "pos: (" << singularities[i].pos[0] << ", " << singularities[i].pos[1] <<")";
 		if (singularitySepNum[i] == 0) {
 			singularitiesToDelete.push_back(i);
 		}
@@ -1312,6 +1347,40 @@ void MyViewer::eliminateDuplicateSeparatrices(double limit) {
 	std::sort(singularitiesToDelete.begin(), singularitiesToDelete.end(), std::greater<int>());
 	for (auto d : singularitiesToDelete) {
 		singularities.erase(singularities.begin() + d);
+	}
+	refreshSeparatricePartsAtFaces();
+	idx = 0;
+	qDebug() << "AFTER****************";
+
+	for (auto c : corners) {
+		qDebug() << idx << " - pos: (" << c.pos[0] << ", " << c.pos[1] << ", " << c.pos[2]
+			<< "), Boundary: " << c.boundary << ", BoundaryV1: " << c.boundaryV1.idx() << ", BoundaryV2: " << c.boundaryV2.idx();
+		for (auto sp : c.separatrices) {
+			qDebug() << "\t" << "sp index: " << sp.separatriceIdx << "fromI: " << sp.fromI << "toI: " << sp.toI << " t: " << sp.t << "sp length: " << separatrices[sp.separatriceIdx].size();
+		}
+		idx++;
+	}
+}
+void MyViewer::refreshSeparatricePartsAtFaces() {
+	for (auto f : mesh.faces()) {
+		mesh.data(f).separaticeParts.clear();
+	}
+	double wtemp[3];
+	MyMesh::VertexHandle v_arraytemp[3];
+	int idx = 0;
+	for (auto sep : separatrices) {
+		MyMesh::FaceHandle prevFace = getFace(sep[0], wtemp, v_arraytemp);
+		int startIdx = 0;
+		for (int i = 1; i < sep.size(); i++) {
+			MyMesh::FaceHandle tempFace = getFace(sep[i], wtemp, v_arraytemp);
+			if (tempFace != prevFace || i == sep.size() - 1) {
+
+				mesh.data(prevFace).separaticeParts.push_back(SeparatricePart(idx,startIdx,i < sep.size() -1 ? i+1 : i));
+				prevFace = tempFace;
+				startIdx = i - 1;
+			}
+		}
+		idx++;
 	}
 }
 void MyViewer::buildSeparatrices(std::vector<Vector>* separatice, Vector dir,MyMesh::VertexHandle v1, MyMesh::VertexHandle v2, MyMesh::FaceHandle f) {
@@ -1657,14 +1726,13 @@ void MyViewer::findPartitionCorners() {
 				int separatriceIdx = mesh.data(f).separaticeParts[i].separatriceIdx;
 				for (size_t j = 0; j < mesh.data(f).separaticeParts.size(); j++)
 				{
-
 					int separatriceIdx2 = mesh.data(f).separaticeParts[j].separatriceIdx;
 					if (i == j || (separatriceIdx == separatriceIdx2 && !(mesh.data(f).separaticeParts[i].fromI > mesh.data(f).separaticeParts[j].toI 
 																		|| mesh.data(f).separaticeParts[j].fromI > mesh.data(f).separaticeParts[i].toI)))
 						continue;
+
 					for (size_t s1Idx = mesh.data(f).separaticeParts[i].fromI; s1Idx < mesh.data(f).separaticeParts[i].toI-1; s1Idx++)
 					{
-						
 						for (size_t s2Idx = mesh.data(f).separaticeParts[j].fromI; s2Idx < mesh.data(f).separaticeParts[j].toI-1; s2Idx++)
 						{
 							Vector P;

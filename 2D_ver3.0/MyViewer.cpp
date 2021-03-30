@@ -833,11 +833,11 @@ void MyViewer::draw() {
 		{
 			glVertex3dv((s.pos + Vector(0.0, 0.0, 0.09)).data());
 		}
-		/*glColor3d(0, 0, 1.0);
+		glColor3d(0, 0, 1.0);
 		for (auto c : corners)
 		{
 			glVertex3dv((c.pos + Vector(0.0, 0.0, 0.11)).data());
-		}*/
+		}
 	}
 	glEnd();
 	glPointSize(1.0);
@@ -1027,18 +1027,6 @@ void MyViewer::drawSeparatrices() {
 	}
 	glColor3d(0.0, 0.0, 0.0);
 	glLineWidth(1.0);
-
-	glLineWidth(3.0);
-	glColor3d(1.0, 1.0, 0.0);
-	for (auto sep : separatrices2) {
-		glBegin(GL_LINE_STRIP);
-		for (auto p : sep) {
-			glVertex3dv((p + Vector(0.0, 0.0, 0.11)).data());
-		}
-		glEnd();
-	}
-	glColor3d(0.0, 0.0, 0.0);
-	glLineWidth(1.0);
 }
 void MyViewer::postSelection(const QPoint& p) {
 	int sel = selectedName();
@@ -1178,7 +1166,7 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 		case Qt::Key_9:
 			eliminateDuplicateSeparatrices(0.5);
 
-			//findPartitionCorners();
+			findPartitionCorners();
 			//detectRegions();
 			//updateVertexNormalsPartition();
 			update();
