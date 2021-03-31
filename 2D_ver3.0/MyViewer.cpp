@@ -829,13 +829,15 @@ void MyViewer::draw() {
 	glBegin(GL_POINTS);
 	glColor3d(0.0, 0.0, 1.0);
 	if (show_singularities) {
-		for (auto s : singularities)
+		/*for (auto s : singularities)
 		{
 			glVertex3dv((s.pos + Vector(0.0, 0.0, 0.09)).data());
-		}
+		}*/
 		glColor3d(0, 0, 1.0);
+		//int idx = 0;
 		for (auto c : corners)
 		{
+			//qDebug() << idx++;
 			glVertex3dv((c.pos + Vector(0.0, 0.0, 0.11)).data());
 		}
 	}
@@ -878,15 +880,15 @@ void MyViewer::draw() {
 	//	glPointSize(10.0);
 	//	glColor3d(1, 0, 0);
 	//	glBegin(GL_POINTS);
-	//	glVertex3dv((corners[4].pos + Vector(0.0, 0.0, 0.13)).data());
+	//	glVertex3dv((corners[69].pos + Vector(0.0, 0.0, 0.13)).data());
 	//	glColor3d(0, 1, 0);
-	//	glVertex3dv((corners[54].pos + Vector(0.0, 0.0, 0.13)).data());
-	//	glColor3d(0, 0, 1);
-	//	glVertex3dv((corners[129].pos + Vector(0.0, 0.0, 0.13)).data());
-	//	glColor3d(1, 1, 0);
-	//	glVertex3dv((corners[102].pos + Vector(0.0, 0.0, 0.13)).data());
-	//	glColor3d(0, 1, 1);
-	//	glVertex3dv((corners[20].pos + Vector(0.0, 0.0, 0.13)).data());
+	//	glVertex3dv((corners[5].pos + Vector(0.0, 0.0, 0.13)).data());
+	//	//glColor3d(0, 0, 1);
+	//	//glVertex3dv((corners[129].pos + Vector(0.0, 0.0, 0.13)).data());
+	//	//glColor3d(1, 1, 0);
+	//	//glVertex3dv((corners[102].pos + Vector(0.0, 0.0, 0.13)).data());
+	//	//glColor3d(0, 1, 1);
+	//	//glVertex3dv((corners[20].pos + Vector(0.0, 0.0, 0.13)).data());
 	//	glEnd();
 	//	glPointSize(1.0);
 	//	glLineWidth(1.0);
@@ -1025,6 +1027,19 @@ void MyViewer::drawSeparatrices() {
 		}
 		glEnd();
 	}
+	//glLineWidth(3.0);
+	//glColor3d(1.0, 1.0, 0.0);
+	//int idx = 0;
+	//for (auto sep : separatrices) {
+	//	if (idx ==20) {
+	//		glBegin(GL_LINE_STRIP);
+	//		for (auto p : sep) {
+	//			glVertex3dv((p + Vector(0.0, 0.0, 0.15)).data());
+	//		}
+	//		glEnd();
+	//	}
+	//	idx++;
+	//}
 	glColor3d(0.0, 0.0, 0.0);
 	glLineWidth(1.0);
 }
@@ -1164,11 +1179,11 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			update();
 			break;
 		case Qt::Key_9:
-			eliminateDuplicateSeparatrices(0.5);
+			eliminateDuplicateSeparatrices(1.0);
 
 			findPartitionCorners();
-			//detectRegions();
-			//updateVertexNormalsPartition();
+			detectRegions();
+			updateVertexNormalsPartition();
 			update();
 			break;
 		case Qt::Key_T:

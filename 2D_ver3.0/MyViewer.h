@@ -114,8 +114,9 @@ private:
 		bool boundary;
 		MyMesh::VertexHandle boundaryV1;
 		MyMesh::VertexHandle boundaryV2;
-		Corner(Vector pos_, std::vector<SeparatricePart> separatrices_, bool boundary_, MyMesh::VertexHandle boundaryV1_ = MyMesh::VertexHandle(), MyMesh::VertexHandle boundaryV2_ = MyMesh::VertexHandle())
-			: pos(pos_), separatrices(separatrices_), boundary(boundary_), boundaryV1(boundaryV1_), boundaryV2(boundaryV2_) {}
+		bool noSeparatrice;
+		Corner(Vector pos_, std::vector<SeparatricePart> separatrices_, bool boundary_, MyMesh::VertexHandle boundaryV1_ = MyMesh::VertexHandle(), MyMesh::VertexHandle boundaryV2_ = MyMesh::VertexHandle(), bool noSeparatrice_ = false)
+			: pos(pos_), separatrices(separatrices_), boundary(boundary_), boundaryV1(boundaryV1_), boundaryV2(boundaryV2_), noSeparatrice(noSeparatrice_) {}
 		Corner()
 			: pos(Vector(0,0,0)), separatrices(std::vector<SeparatricePart>()), boundary(false), boundaryV1(MyMesh::VertexHandle()), boundaryV2(MyMesh::VertexHandle()) {}
 	};
@@ -228,6 +229,7 @@ private:
 	std::vector<std::vector<Vector>> separatrices;
 	std::vector<std::vector<Vector>> separatrices2;
 	OpenMesh::PolyMesh_ArrayKernelT<MyTraits> quadPartition;
+	std::vector<std::vector<int>> partitionCorners;
 	// Bezier
 	size_t degree[2];
 	std::vector<Vec> control_points;
