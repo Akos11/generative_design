@@ -361,28 +361,6 @@ void MyViewer::updateVertexNormalsConstraint() {
 		keepOutConstraint.set_normal(v, n);
 	}
 }
-void MyViewer::updateVertexNormalsPartition() {
-	quadPartition.request_face_normals(); quadPartition.request_vertex_normals();
-	quadPartition.update_face_normals();
-	// Weights according to:
-	//   N. Max, Weights for computing vertex normals from facet normals.
-	//     Journal of Graphics Tools, Vol. 4(2), 1999.
-	for (auto v : quadPartition.vertices()) {
-		Vector n(0.0, 0.0, 0.0);
-		for (auto h : quadPartition.vih_range(v)) {
-			if (quadPartition.is_boundary(h))
-				continue;
-			auto in_vec = quadPartition.calc_edge_vector(h);
-			auto out_vec = quadPartition.calc_edge_vector(quadPartition.next_halfedge_handle(h));
-			double w = in_vec.sqrnorm() * out_vec.sqrnorm();
-			n += (in_vec % out_vec) / (w == 0.0 ? 1.0 : w);
-		}
-		double len = n.length();
-		if (len != 0.0)
-			n /= len;
-		quadPartition.set_normal(v, n);
-	}
-}
 void MyViewer::updateMesh(bool update_mean_range) {
 	if (model_type == ModelType::BEZIER_SURFACE)
 		generateMesh();
@@ -846,34 +824,7 @@ void MyViewer::draw() {
 	glLineWidth(1.0);
 	if (show_separatrices)
 		drawSeparatrices();
-	glLineWidth(5.5f);
-	glColor3d(0.0, 1.0, 0.0);
-	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-	//glBegin(GL_POLYGON);
-	for (auto f : quadPartition.faces()) {
-
-		glBegin(GL_POLYGON);
-		for (auto v : quadPartition.fv_range(f)) {
-			glNormal3dv(quadPartition.normal(v).data());
-			glVertex3dv(quadPartition.point(v).data());
-		}
-		glEnd();
-	}
-	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-	for (auto f : quadPartition.faces()) {
-		glBegin(GL_POLYGON);
-		if (quadPartition.data(f).tagged) {
-			glColor3d(1.0, 1.0, 0.0);
-			for (auto v : quadPartition.fv_range(f))
-			{
-				glVertex3dv((quadPartition.point(v) + Vector(0.0, 0.0, 0.005)).data());
-			}
-			glColor3d(1.0, 0.0, 0.0);
-		}
-		glEnd();
-	}
-	glLineWidth(1.0f);
-	glColor3d(0.0, 0.0, 1.0);
+	drawRegions();
 	///////////////////////////
 	//if (corners.size() >= 88) {
 	//	glLineWidth(2.5);
@@ -1043,6 +994,24 @@ void MyViewer::drawSeparatrices() {
 	glColor3d(0.0, 0.0, 0.0);
 	glLineWidth(1.0);
 }
+void MyViewer::drawRegions() const {
+	glLineWidth(5.5f);
+	glColor3d(0.0, 1.0, 0.0);
+	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	Vector offset = Vector(0, 0, 0.11f);
+	for (auto r : regions) {
+		glBegin(GL_POLYGON);
+		for (auto cIdx :r.corners) {
+			glNormal3dv(Vector(0, 0, -1).data());
+			glVertex3dv((corners[cIdx].pos + offset).data());
+		}
+		glEnd();
+	}
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+	glLineWidth(1.0f);
+	glColor3d(0.0, 0.0, 1.0);
+}
 void MyViewer::postSelection(const QPoint& p) {
 	int sel = selectedName();
 	if (sel == -1) {
@@ -1077,10 +1046,11 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 	if (e->modifiers() == Qt::NoModifier)
 		switch (e->key()) {
 		case Qt::Key_R:
-			quadPartition.clear();
+			
 			singularities.clear();
 			separatrices.clear();
 			corners.clear();
+			regions.clear();
 			if (model_type == ModelType::MESH)
 				openMesh(last_filename, false);
 			else if (model_type == ModelType::BEZIER_SURFACE)
@@ -1163,27 +1133,27 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			initiatePDE();
 			show_PDEu = true;
 			show_PDEcross = true;
-			update();
-			break;
-
-		case Qt::Key_7:
 			initVFunction(6);
 			update();
 			break;
 
-		case Qt::Key_8:
+		case Qt::Key_7:
 			findSingularities();
 			findSeparatrices2();
 			show_singularities = true;
 			show_separatrices = true;
 			update();
 			break;
-		case Qt::Key_9:
+
+		case Qt::Key_8:
 			eliminateDuplicateSeparatrices(1.0);
 
 			findPartitionCorners();
 			detectRegions();
-			updateVertexNormalsPartition();
+			update();
+			break;
+		case Qt::Key_9:
+			collapseRegions();
 			update();
 			break;
 		case Qt::Key_T:

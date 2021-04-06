@@ -1808,10 +1808,8 @@ double MyViewer::getDistance(Vector p1, Vector p2) {
 }
 
 void MyViewer::detectRegions() {
-
 	addCornersToEdgesAndVertices();
 	std::vector<std::vector<int>> neighbours = getCornerNeighbours();
-	std::vector<std::vector<Vector>> regions;
 	int idx = 0;
 	//for (auto c : corners) {
 	//	qDebug() << idx << " - pos: (" << c.pos[0] << ", " << c.pos[1] << ", " << c.pos[2]
@@ -1868,10 +1866,8 @@ void MyViewer::detectRegions() {
 					break;
 				}
 				else if (maxCorner != idx) {
-				//	qDebug() <<"Pushed Back" << maxCorner;
-					points.push_back(corners[maxCorner].pos);
 					pointsCorner.push_back(maxCorner);
-
+					points.push_back(corners[maxCorner].pos);
 					prevCorner2 = prevCorner;
 					prevCorner = maxCorner;
 				}
@@ -1888,9 +1884,9 @@ void MyViewer::detectRegions() {
 				for (auto region : regions)
 				{
 					int same = 0;
-					for (auto p : region) {
+					for (auto p : region.corners) {
 						for (int i = 0; i < points.size(); i++) {
-							if (getDistance(p, points[i]) < 0.0001) {
+							if (pointsCorner[i] == p) {
 								same++;
 							}
 						}
@@ -1901,36 +1897,15 @@ void MyViewer::detectRegions() {
 					}
 				}
 				if (!alreadyIn) {
-					regions.push_back(points);
-					partitionCorners.push_back(pointsCorner);
+					regions.push_back(Region(pointsCorner));
 				}
 				count++;
-
 			}
 			//qDebug() << "##############################";
 		}
 		idx++;
 	}
-	qDebug() << "Region size: " << regions.size();
-	for (auto r : regions) {
-		MyMesh::VertexHandle vhandle[10];
-		
-		MyMesh::Point offset = MyMesh::Point(0, 0, 0.3);
-		for (size_t i = 0; i < r.size(); i++)
-		{
-			vhandle[i] = quadPartition.add_vertex(r[i] + offset);
-		}
-
-		std::vector<MyMesh::VertexHandle>  face_vhandles;
-		face_vhandles.clear();
-		for (size_t i = 0; i < r.size(); i++)
-		{
-			face_vhandles.push_back(vhandle[i]);
-		}
-		MyMesh::FaceHandle fh = quadPartition.add_face(face_vhandles);
-		/*if (r.size() != 4)
-			quadPartition.data(fh).tagged = true;*/
-	}
+	//updateRegionSides();
 }
 
 std::vector<std::vector<int>> MyViewer::getCornerNeighbours() {
@@ -2174,4 +2149,150 @@ std::vector<int> MyViewer::getBoundaryNeighbourCorner(int corner, std::vector<in
 	returnVec.push_back(boundaryCornerChain[prevIdx]);
 	returnVec.push_back(boundaryCornerChain[nextIdx]);
 	return returnVec;
+}
+void MyViewer::updateRegionSides() {
+	for (size_t i = 0; i < regions.size(); i++)
+	{
+		std::vector<int> tempIDxs = {3,0, 0,1, 1,2, 2,3, 3,0 };
+		for (size_t j = 0; j < tempIDxs.size(); j+=2)
+		{
+			int j1 = tempIDxs[j];
+			int j2 = tempIDxs[j+1];
+
+		}
+	}
+}
+void MyViewer::collapseRegions() {
+	std::vector<regionPair> regionPairs = getRegionPairs();
+	
+	double epsilon = 0.1;
+	double minAlpha = 99999999999;
+	double minSmallerArea = 99999999999;
+	int minIdx = -1;
+	int idx = 0;
+	for (auto rp : regionPairs) {
+		
+		idx++;
+	}
+}
+std::vector<MyViewer::regionPair> MyViewer::getRegionPairs() {
+	std::vector<regionPair> regionPairs;
+	int idx = 0;
+	for (auto region : regions) {
+		int idx2 = 0;
+		//qDebug() << idx << "-region";
+		//for (auto c : region.corners) {
+		//	qDebug() << "\tcorner: " << c << " pos: (" << corners[c].pos[0] << ", " << corners[c].pos[1] << ")";
+		//}
+		for (auto region2 : regions) {
+
+			if (idx >= idx2) {
+				idx2++;
+				continue;
+			}
+			std::vector<int> tempIDxs = { 0,1, 1,2, 2,3, 3,0 };
+			int tempi = -1;
+			int tempi2 = -1;
+			int tempj = -1;
+			int tempj2 = -1;
+			for (size_t i = 0; i < tempIDxs.size(); i += 2)
+			{
+				int i1 = tempIDxs[i];
+				int i2 = tempIDxs[i + 1];
+				for (size_t j = 0; j < tempIDxs.size(); j += 2)
+				{
+					int j1 = tempIDxs[j];
+					int j2 = tempIDxs[j + 1];
+					if (region.corners[i1] == region2.corners[j1] && region.corners[i2] == region2.corners[j2]) {
+						tempi = i1;
+						tempi2 = i2;
+						tempj = j1;
+						tempj2 = j2;
+					}
+					if (region.corners[i1] == region2.corners[j2] && region.corners[i2] == region2.corners[j1]) {
+						tempi = i1;
+						tempi2 = i2;
+						tempj = j2;
+						tempj2 = j1;
+					}
+				}
+			}
+			if (tempi != -1) {
+				if (!corners[region.corners[tempi]].boundary && corners[region.corners[tempi]].separatrices.size() <= 3 && !corners[region.corners[tempi2]].boundary && corners[region.corners[tempi2]].separatrices.size() <= 3)
+					continue;
+				Vector i1V = getSideVector(region.corners, tempi, tempi2);
+				Vector i2V = getSideVector(region.corners, tempi2, tempi);
+				Vector j1V = getSideVector(region2.corners, tempj, tempj2);
+				Vector j2V = getSideVector(region2.corners, tempj2, tempj);
+
+				float ratio = ((i1V.length() + i2V.length()) / 2) / (corners[region.corners[tempi]].pos - corners[region.corners[tempi2]].pos).length();
+				ratio += ((j1V.length() + j2V.length()) / 2) / (corners[region2.corners[tempj]].pos - corners[region2.corners[tempj2]].pos).length();
+
+				i1V = i1V.normalize();
+				i2V = i2V.normalize();
+				j1V = j1V.normalize();
+				j2V = j2V.normalize();
+
+				//qDebug() << "i1V: (" << i1V[0] << ", " <<  i1V[1] << ") i2V: (" << i2V[0] << ", " << i2V[1] << ")";
+				//qDebug() << "j1V: (" << j1V[0] << ", " <<  j1V[1] << ") j2V: (" << j2V[0] << ", " << j2V[1] << ")";
+				//qDebug() << "--------------------------------";
+				//qDebug() << idx << "-region";
+				//for (auto c : region.corners) {
+				//	qDebug() << "\tcorner: " << c << " pos: (" << corners[c].pos[0] << ", " << corners[c].pos[1] << ")";
+				//}
+				//qDebug() << idx2 << "-region";
+				//for (auto c : region2.corners) {
+				//	qDebug() << "\tcorner: " << c << " pos: (" << corners[c].pos[0] << ", " << corners[c].pos[1] << ")";
+				//}
+				//qDebug() << "--------------------------------";
+				double area1 = calculateArea(corners[region.corners[0]].pos, corners[region.corners[1]].pos, corners[region.corners[2]].pos, corners[region.corners[3]].pos);
+				double area2 = calculateArea(corners[region2.corners[0]].pos, corners[region2.corners[1]].pos, corners[region2.corners[2]].pos, corners[region2.corners[3]].pos);
+				float alpha = abs(-1 - dot(i1V, j1V)) + abs(-1 - dot(i2V, j2V));
+				regionPairs.push_back(regionPair(idx, idx2, alpha, ratio, area1 < area2 ? area1 : area2));
+			}
+			idx2++;
+		}
+		idx++;
+	}
+	for (auto rp : regionPairs) {
+		qDebug() << "regionIdx1: " << rp.regionIdx1 << "regionIdx2: " << rp.regionIdx2 << "alpha: " << rp.alpha << " ratio: " << rp.ratio << " area: " << rp.smallerArea;
+	}
+	return regionPairs;
+}
+MyViewer::Vector MyViewer::getSideVector(std::vector<int> tmpcorners, int i1, int i2) {
+	if (i2 > i1) {
+		if (i2 != 3 || i1 != 0) {
+			int tempi3 = i1 - 1;
+			tempi3 = tempi3 < 0 ? 3 : tempi3;
+			return corners[tmpcorners[tempi3]].pos - corners[tmpcorners[i1]].pos;
+		}
+		else {
+			int tempi3 = 1;
+			return corners[tmpcorners[tempi3]].pos - corners[tmpcorners[i1]].pos;
+		}
+	}
+	else {
+		if (i1 != 3 || i2 != 0) {
+			int tempi3 = i1 + 1;
+			tempi3 = tempi3 > 3 ? 0 : tempi3;
+			return corners[tmpcorners[tempi3]].pos - corners[tmpcorners[i1]].pos;
+		}
+		else {
+			int tempi3 = 2;
+			return corners[tmpcorners[tempi3]].pos - corners[tmpcorners[i1]].pos;
+		}
+	}
+}
+double MyViewer::calculateArea(Vector A, Vector B, Vector C, Vector D) {
+	double a = (A - B).length();
+	double b = (B - C).length();
+	double c = (C - D).length();
+	double d = (D - A).length();
+	double s = (a + b + c + d) / 2;
+
+	double alpha = acos(dot((B-A).normalize(), (D-A).normalize()));
+	double gamma = acos(dot((B-C).normalize(), (D-C).normalize()));
+
+	double T = sqrt((s - a) * (s - b) * (s - c) * (s - d) - a * b * c * d * cos((alpha + gamma) / 2) * cos((alpha + gamma) / 2));
+	return T;
 }

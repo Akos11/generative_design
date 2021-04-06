@@ -121,11 +121,18 @@ private:
 			: pos(Vector(0,0,0)), separatrices(std::vector<SeparatricePart>()), boundary(false), boundaryV1(MyMesh::VertexHandle()), boundaryV2(MyMesh::VertexHandle()) {}
 	};
 	std::vector<Corner> corners;
+	struct Region {
+		std::vector<int> corners;
+		std::vector<Vector> sides1;
+		std::vector<Vector> sides2;
+		Region(std::vector<int> corners_): corners(corners_) {
+		}
+	};
+	std::vector<Region> regions;
 	// Mesh
 	void updateMesh(bool update_mean_range = true);
 	void updateVertexNormals();
 	void updateVertexNormalsConstraint();
-	void updateVertexNormalsPartition();
 	void localSystem(const Vector& normal, Vector& u, Vector& v);
 	double voronoiWeight(MyMesh::HalfedgeHandle in_he);
 	void updateMeanMinMax();
@@ -141,6 +148,7 @@ private:
 	void drawControlNet() const;
 	void drawAxes() const;
 	void drawAxesWithNames() const;
+	void drawRegions() const;
 	static Vec intersectLines(const Vec& ap, const Vec& ad, const Vec& bp, const Vec& bd);
 
 	// Other
@@ -207,6 +215,21 @@ private:
 		MyMesh::VertexHandle getNextBoundary(MyMesh::VertexHandle v, MyMesh::VertexHandle vPrev);
 		int findNextBoundaryCorner(MyMesh::VertexHandle boundaryV1, MyMesh::VertexHandle boundaryV2);
 		bool isLeft(Vector a, Vector b, Vector c);
+		void updateRegionSides();
+		struct regionPair {
+			int regionIdx1;
+			int regionIdx2;
+			double alpha;
+			double ratio;
+			double smallerArea;
+			regionPair(int regionIdx1_, int regionIdx2_, double alpha_, double ratio_, double smallerArea_) : regionIdx1(regionIdx1_), regionIdx2(regionIdx2_), alpha(alpha_), ratio(ratio_), smallerArea(smallerArea_)
+			{}
+		};
+		void collapseRegions();
+		std::vector<regionPair> getRegionPairs();
+		Vector getSideVector(std::vector<int> corners, int i1, int i2);
+		double calculateArea(Vector A, Vector B, Vector C, Vector D);
+
 	bool is_collapse_ok2(MyMesh::HalfedgeHandle v0v1);
 	//////////////////////
 	// Member variables //
@@ -228,8 +251,6 @@ private:
 	std::vector<Singularity> singularities;
 	std::vector<std::vector<Vector>> separatrices;
 	std::vector<std::vector<Vector>> separatrices2;
-	OpenMesh::PolyMesh_ArrayKernelT<MyTraits> quadPartition;
-	std::vector<std::vector<int>> partitionCorners;
 	// Bezier
 	size_t degree[2];
 	std::vector<Vec> control_points;
