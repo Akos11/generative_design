@@ -123,8 +123,6 @@ private:
 	std::vector<Corner> corners;
 	struct Region {
 		std::vector<int> corners;
-		std::vector<Vector> sides1;
-		std::vector<Vector> sides2;
 		Region(std::vector<int> corners_): corners(corners_) {
 		}
 	};
@@ -222,13 +220,19 @@ private:
 			double alpha;
 			double ratio;
 			double smallerArea;
-			regionPair(int regionIdx1_, int regionIdx2_, double alpha_, double ratio_, double smallerArea_) : regionIdx1(regionIdx1_), regionIdx2(regionIdx2_), alpha(alpha_), ratio(ratio_), smallerArea(smallerArea_)
+			int commonCorner1Idx;
+			int commonCorner2Idx;
+			regionPair(int regionIdx1_, int regionIdx2_, double alpha_, double ratio_, double smallerArea_, int commonCorner1Idx_, int commonCorner2Idx_) : regionIdx1(regionIdx1_), regionIdx2(regionIdx2_), alpha(alpha_), ratio(ratio_), smallerArea(smallerArea_), commonCorner1Idx(commonCorner1Idx_), commonCorner2Idx(commonCorner2Idx_)
 			{}
 		};
+		void mergeRegions();
 		void collapseRegions();
 		std::vector<regionPair> getRegionPairs();
 		Vector getSideVector(std::vector<int> corners, int i1, int i2);
 		double calculateArea(Vector A, Vector B, Vector C, Vector D);
+		void getNewCornerIdxs(std::vector<int> corners, int commonCornerIdx1, int commonCornerIdx2, int* newCornerIdx1, int* newCornerIdx2);
+		void updateSeparatriceBreaks(int commonCornerIdx1, int commonCornerIdx2);
+		bool contains(std::vector<int> vector, int i);
 
 	bool is_collapse_ok2(MyMesh::HalfedgeHandle v0v1);
 	//////////////////////
@@ -250,6 +254,7 @@ private:
 	};
 	std::vector<Singularity> singularities;
 	std::vector<std::vector<Vector>> separatrices;
+	std::vector<std::vector<int>> separatriceBreaks;
 	std::vector<std::vector<Vector>> separatrices2;
 	// Bezier
 	size_t degree[2];

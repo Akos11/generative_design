@@ -798,10 +798,10 @@ void MyViewer::draw() {
 	glEnd();
 	glPointSize(1.0);
 	glLineWidth(1.0);
-	if (show_PDEu)
+	/*if (show_PDEu)
 		drawPDEu();
 	if (show_PDEcross)
-		drawPDEcross();
+		drawPDEcross();*/
 	glLineWidth(2.5);
 	glPointSize(8.0);
 	glBegin(GL_POINTS);
@@ -813,11 +813,11 @@ void MyViewer::draw() {
 		}*/
 		glColor3d(0, 0, 1.0);
 		//int idx = 0;
-		for (auto c : corners)
-		{
-			//qDebug() << idx++;
-			glVertex3dv((c.pos + Vector(0.0, 0.0, 0.11)).data());
-		}
+		//for (auto c : corners)
+		//{
+		//	//qDebug() << idx++;
+		//	glVertex3dv((c.pos + Vector(0.0, 0.0, 0.11)).data());
+		//}
 	}
 	glEnd();
 	glPointSize(1.0);
@@ -831,9 +831,9 @@ void MyViewer::draw() {
 	//	glPointSize(10.0);
 	//	glColor3d(1, 0, 0);
 	//	glBegin(GL_POINTS);
-	//	glVertex3dv((corners[69].pos + Vector(0.0, 0.0, 0.13)).data());
+	//	glVertex3dv((corners[136].pos + Vector(0.0, 0.0, 0.13)).data());
 	//	glColor3d(0, 1, 0);
-	//	glVertex3dv((corners[5].pos + Vector(0.0, 0.0, 0.13)).data());
+	//	glVertex3dv((corners[223].pos + Vector(0.0, 0.0, 0.13)).data());
 	//	//glColor3d(0, 0, 1);
 	//	//glVertex3dv((corners[129].pos + Vector(0.0, 0.0, 0.13)).data());
 	//	//glColor3d(1, 1, 0);
@@ -971,12 +971,30 @@ void MyViewer::drawPDEcross() {
 void MyViewer::drawSeparatrices() {
 	glLineWidth(3.0);
 	glColor3d(1.0, 0.0, 1.0);
+	int idx = 0;
 	for (auto sep : separatrices) {
+		bool draw = true;
+		/*if (separatriceBreaks[idx].size() > 0 && separatriceBreaks[idx][0] == 0)
+			draw = false;*/
+		int idxBreak = 0;
+		int idx2 = 0;
 		glBegin(GL_LINE_STRIP);
 		for (auto p : sep) {
-			glVertex3dv((p + Vector(0.0, 0.0, 0.11)).data());
+			if (draw) {
+				glVertex3dv((p + Vector(0.0, 0.0, 0.11)).data());
+			}
+			if (separatriceBreaks.size()  > 0 && separatriceBreaks[idx].size() > 0 && separatriceBreaks[idx][idxBreak] == idx2) {
+				draw = !draw;
+				idxBreak++;
+				if (draw)
+					glBegin(GL_LINE_STRIP);
+				else
+					glEnd();
+			}
+			idx2++;
 		}
 		glEnd();
+		idx++;
 	}
 	//glLineWidth(3.0);
 	//glColor3d(1.0, 1.0, 0.0);
@@ -998,17 +1016,28 @@ void MyViewer::drawRegions() const {
 	glLineWidth(5.5f);
 	glColor3d(0.0, 1.0, 0.0);
 	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-	Vector offset = Vector(0, 0, 0.11f);
+	glLineWidth(2.5);
+	glPointSize(8.0);
+	glBegin(GL_POINTS);
+	Vector offset = Vector(0, 0, 0.21f);
+	int idx = 0;
 	for (auto r : regions) {
-		glBegin(GL_POLYGON);
-		for (auto cIdx :r.corners) {
-			glNormal3dv(Vector(0, 0, -1).data());
-			glVertex3dv((corners[cIdx].pos + offset).data());
-		}
-		glEnd();
+		//if (idx >= 102 && idx < 104) {
+			//glBegin(GL_POLYGON);
+			//for (auto cIdx : r.corners) {
+			//	glNormal3dv(Vector(0, 0, -1).data());
+			//	glVertex3dv((corners[cIdx].pos + offset).data());
+			//}
+			//glEnd();
+			glColor3d(0.0, 0.0, 1.0);
+			for (auto cIdx : r.corners) {
+				glVertex3dv((corners[cIdx].pos + offset).data());
+			}
+		//}
+		idx++;
 	}
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
+	glEnd();
 	glLineWidth(1.0f);
 	glColor3d(0.0, 0.0, 1.0);
 }
@@ -1146,31 +1175,18 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			break;
 
 		case Qt::Key_8:
-			eliminateDuplicateSeparatrices(1.0);
+			eliminateDuplicateSeparatrices(0.8);
 
 			findPartitionCorners();
 			detectRegions();
 			update();
 			break;
 		case Qt::Key_9:
-			collapseRegions();
+			mergeRegions();
 			update();
 			break;
 		case Qt::Key_T:
-			for (size_t i = 18; i <25; i++)
-			{
-				buildStreamLine(Vector(0.2, i, 0));
-			}
-			//buildStreamLine(Vector(0, 28.2, 0));
-			//buildStreamLine(Vector(0, 27.0, 0));
-			//buildStreamLine(Vector(0, 26.5, 0));
-			//buildStreamLine(Vector(0, 25.5, 0));
-			//buildStreamLine(Vector(0, 24.5, 0));
-			//buildStreamLine(Vector(0, 23.5, 0));
-			//buildStreamLine(Vector (0,23.9,0));
-			//buildStreamLine(Vector (0,22.9,0));
-			//buildStreamLine(Vector (0,20.9,0));
-			//buildStreamLine(Vector (0,13.9,0));
+			collapseRegions();
 			update();
 			break;
 		default:

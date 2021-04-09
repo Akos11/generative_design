@@ -1336,6 +1336,7 @@ void MyViewer::eliminateDuplicateSeparatrices(double limit) {
 		singularities.erase(singularities.begin() + d);
 	}
 	refreshSeparatricePartsAtFaces();
+	separatriceBreaks = std::vector<std::vector<int>>(separatrices.size());
 }
 void MyViewer::refreshSeparatricePartsAtFaces() {
 	for (auto f : mesh.faces()) {
@@ -2162,21 +2163,180 @@ void MyViewer::updateRegionSides() {
 		}
 	}
 }
+void MyViewer::mergeRegions() {
+	bool collapsed = true;
+	double ratioLimit = 0.1;
+	double alphaLimit = 0.1;
+	double areaLimit = 1000;
+	double epsilon = 0.03;
+	for (int j = 0; j < 45; j ++)
+	{
+		alphaLimit = 0.1;
+		for (int i = 0; i < 6; i ++)
+		{
+			collapsed = true;
+			while (collapsed) {
+				collapsed = false;
+				std::vector<regionPair> regionPairs = getRegionPairs();
+
+
+				double minAlpha = 99999999999;
+				double minSmallerArea = 99999999999;
+				double minRatio = 9999999;
+				int minIdx = -1;
+				int idx = 0;
+				for (auto rp : regionPairs) {
+					if (rp.ratio < ratioLimit && rp.smallerArea < areaLimit && rp.alpha < alphaLimit) {
+						if (rp.ratio < minRatio - epsilon) {
+							minAlpha = rp.alpha;
+							minSmallerArea = rp.smallerArea;
+							minRatio = rp.ratio;
+							minIdx = idx;
+						}
+						if (abs(rp.ratio - minRatio) < epsilon && rp.alpha < minAlpha) {
+							minAlpha = rp.alpha;
+							minSmallerArea = rp.smallerArea;
+							minRatio = rp.ratio;
+							minIdx = idx;
+						}
+					}
+					idx++;
+				}
+				int newCorner1Idx = -1;
+				int newCorner2Idx = -1;
+				if (minIdx == -1)
+					continue;
+				getNewCornerIdxs(regions[regionPairs[minIdx].regionIdx2].corners, regionPairs[minIdx].commonCorner1Idx, regionPairs[minIdx].commonCorner2Idx, &newCorner1Idx, &newCorner2Idx);
+				if (newCorner1Idx != -1 && newCorner2Idx != -2) {
+					std::vector<int> newCorners = { newCorner1Idx, newCorner2Idx, regionPairs[minIdx].commonCorner1Idx ,regionPairs[minIdx].commonCorner2Idx };
+					for (size_t i = 0; i < regions[regionPairs[minIdx].regionIdx1].corners.size(); i++)
+					{
+						if (regions[regionPairs[minIdx].regionIdx1].corners[i] == regionPairs[minIdx].commonCorner1Idx)
+							regions[regionPairs[minIdx].regionIdx1].corners[i] = newCorner1Idx;
+						if (regions[regionPairs[minIdx].regionIdx1].corners[i] == regionPairs[minIdx].commonCorner2Idx)
+							regions[regionPairs[minIdx].regionIdx1].corners[i] = newCorner2Idx;
+					}
+					updateSeparatriceBreaks(regionPairs[minIdx].commonCorner1Idx, regionPairs[minIdx].commonCorner2Idx);
+					regions.erase(regions.begin() + regionPairs[minIdx].regionIdx2);
+					collapsed = true;
+				}
+			}
+			alphaLimit += 0.1;
+		}
+		if (j < 25)
+			ratioLimit += 0.1;
+		else
+			ratioLimit += 0.5;
+
+	}
+	/*int tidx = 0;
+	for (auto sb : separatriceBreaks) {
+		qDebug() << "separatriceBreak: " << tidx ;
+		for (auto c : sb) {
+			qDebug() << "\t " << c;
+		}
+		tidx++;
+	}*/
+
+}
 void MyViewer::collapseRegions() {
-	std::vector<regionPair> regionPairs = getRegionPairs();
-	
-	double epsilon = 0.1;
-	double minAlpha = 99999999999;
-	double minSmallerArea = 99999999999;
-	int minIdx = -1;
+	double limit = 2.0;
 	int idx = 0;
-	for (auto rp : regionPairs) {
-		
+	for (auto r : regions) {
+		float side1Length = (corners[r.corners[0]].pos - corners[r.corners[1]].pos).length();
+		float side2Length = (corners[r.corners[1]].pos - corners[r.corners[2]].pos).length();
+		float side3Length = (corners[r.corners[2]].pos - corners[r.corners[3]].pos).length();
+		float side4Length = (corners[r.corners[3]].pos - corners[r.corners[0]].pos).length();
+
+		if ((side1Length + side3Length) / 2 < limit) {
+			qDebug() << "idx: " << idx;
+			bool otherRegionwithSameSide = false;
+			int idx2 = 0;
+			for (auto r2 : regions) {
+				if (idx != idx2) {
+					if ((contains(r2.corners, r.corners[0]) && contains(r2.corners, r.corners[1])) || (contains(r2.corners, r.corners[2]) && contains(r2.corners, r.corners[3]))) {
+						otherRegionwithSameSide = true;
+					}
+				}
+				idx2++;
+			}
+			if (!otherRegionwithSameSide) {
+				qDebug() <<"COLLAPSE1";
+				qDebug() << "Corner1: " << r.corners[0]; 
+				for (auto sp : corners[r.corners[0]].separatrices)
+				{
+					qDebug() << "\t" << "sp index: " << sp.separatriceIdx << "fromI: " << sp.fromI << "toI: " << sp.toI;
+				}
+				qDebug() << "Corner2: " << r.corners[3];
+				for (auto sp : corners[r.corners[3]].separatrices)
+				{
+					qDebug() << "\t" << "sp index: " << sp.separatriceIdx << "fromI: " << sp.fromI << "toI: " << sp.toI;
+				}
+
+				corners[r.corners[0]].pos = Vector(0, 0, 0);// corners[r.corners[1]].pos;
+				corners[r.corners[3]].pos = Vector(0, 0, 0);//corners[r.corners[2]].pos;
+				qDebug() << "Before: **************************************";
+				int tidx = 0;
+				for (auto sb : separatriceBreaks) {
+					qDebug() << "separatriceBreak: " << tidx;
+					for (auto c : sb) {
+						qDebug() << "\t " << c;
+					}
+					tidx++;
+				}
+				updateSeparatriceBreaks(r.corners[0], r.corners[3]);
+				qDebug() << "After: **************************************";
+
+				tidx = 0;
+				for (auto sb : separatriceBreaks) {
+					qDebug() << "separatriceBreak: " << tidx ;
+					for (auto c : sb) {
+						qDebug() << "\t " << c;
+					}
+					tidx++;
+				}
+				break;
+			}
+		}
+		else if ((side2Length + side4Length) / 2 < 5.0) {
+			qDebug() << "idx: " << idx;
+			bool otherRegionwithSameSide = false;
+			int idx2 = 0;
+			for (auto r2 : regions) {
+				if (idx != idx2) {
+					if ((contains(r2.corners, r.corners[1]) && contains(r2.corners, r.corners[2])) || (contains(r2.corners, r.corners[3]) && contains(r2.corners, r.corners[0]))) {
+						otherRegionwithSameSide = true;
+					}
+				}
+				idx2++;
+			}
+			if (!otherRegionwithSameSide) {
+				qDebug() << "COLLAPSE2";
+				qDebug() << "Corner1: " << r.corners[0] << "Corner2: " << r.corners[3];
+
+				corners[r.corners[1]].pos = corners[r.corners[2]].pos;
+				corners[r.corners[0]].pos = corners[r.corners[3]].pos;
+				updateSeparatriceBreaks(r.corners[1], r.corners[0]);
+
+				break;
+			}
+		}
 		idx++;
 	}
 }
 std::vector<MyViewer::regionPair> MyViewer::getRegionPairs() {
 	std::vector<regionPair> regionPairs;
+	std::vector<int> cornerRegionCount(corners.size());
+	for (size_t i = 0; i < corners.size(); i++)
+	{
+		cornerRegionCount[i] = 0;
+	}
+	for (size_t i = 0; i < regions.size(); i++)
+	{
+		for (auto c : regions[i].corners) {
+			cornerRegionCount[c]++;
+		}
+	}
 	int idx = 0;
 	for (auto region : regions) {
 		int idx2 = 0;
@@ -2218,15 +2378,26 @@ std::vector<MyViewer::regionPair> MyViewer::getRegionPairs() {
 				}
 			}
 			if (tempi != -1) {
-				if (!corners[region.corners[tempi]].boundary && corners[region.corners[tempi]].separatrices.size() <= 3 && !corners[region.corners[tempi2]].boundary && corners[region.corners[tempi2]].separatrices.size() <= 3)
+				//if ((idx == 102 && idx2 == 103) || (idx == 103 && idx2 == 102))
+				//	qDebug() << "regionIdx1: " << idx << "regionIdx2: " << idx2;// << "alpha: " << rp.alpha << " ratio: " << rp.ratio << " area: " << rp.smallerArea;
+				if ((!corners[region.corners[tempi]].boundary && cornerRegionCount[region.corners[tempi]] == 3) || (!corners[region.corners[tempi2]].boundary && cornerRegionCount[region.corners[tempi2]] == 3))
+				{
+					/*if ((idx == 102 && idx2 == 103) || (idx == 103 && idx2 == 102)) {
+						qDebug() << " 1Boundary: " << corners[region.corners[tempi]].boundary << " 1cornerRegionCount: " << cornerRegionCount[region.corners[tempi]] << " 2Boundary: " << corners[region.corners[tempi2]].boundary << " 2cornerRegionCount: " << cornerRegionCount[region.corners[tempi2]];
+
+						qDebug() << "Continue";
+					}*/
+					idx2++;
 					continue;
+				}
 				Vector i1V = getSideVector(region.corners, tempi, tempi2);
 				Vector i2V = getSideVector(region.corners, tempi2, tempi);
 				Vector j1V = getSideVector(region2.corners, tempj, tempj2);
 				Vector j2V = getSideVector(region2.corners, tempj2, tempj);
 
 				float ratio = ((i1V.length() + i2V.length()) / 2) / (corners[region.corners[tempi]].pos - corners[region.corners[tempi2]].pos).length();
-				ratio += ((j1V.length() + j2V.length()) / 2) / (corners[region2.corners[tempj]].pos - corners[region2.corners[tempj2]].pos).length();
+				float tempRatio = ((j1V.length() + j2V.length()) / 2) / (corners[region2.corners[tempj]].pos - corners[region2.corners[tempj2]].pos).length();
+				ratio = ratio < tempRatio ? ratio : tempRatio;
 
 				i1V = i1V.normalize();
 				i2V = i2V.normalize();
@@ -2248,15 +2419,26 @@ std::vector<MyViewer::regionPair> MyViewer::getRegionPairs() {
 				double area1 = calculateArea(corners[region.corners[0]].pos, corners[region.corners[1]].pos, corners[region.corners[2]].pos, corners[region.corners[3]].pos);
 				double area2 = calculateArea(corners[region2.corners[0]].pos, corners[region2.corners[1]].pos, corners[region2.corners[2]].pos, corners[region2.corners[3]].pos);
 				float alpha = abs(-1 - dot(i1V, j1V)) + abs(-1 - dot(i2V, j2V));
-				regionPairs.push_back(regionPair(idx, idx2, alpha, ratio, area1 < area2 ? area1 : area2));
+				//if (regionPairs.size() == 181) {
+				//	qDebug() << "----------------";
+				//	qDebug() << "size: " << region2.corners.size();
+				//	qDebug() << "commonCornerIdx1: " << region.corners[tempi] << " commonCornerIdx2: " << region.corners[tempi2];
+				//	qDebug() << "Corners: " << region.corners[0] << "; " << region.corners[1] << "; " << region.corners[2] << "; " << region.corners[3];
+				//	qDebug() << "2Corners: " << region2.corners[0] << "; " << region2.corners[1] << "; " << region2.corners[2] << "; " << region2.corners[3];
+				//	qDebug() << "----------------";
+
+				//}
+				regionPairs.push_back(regionPair(idx, idx2, alpha, ratio, area1 < area2 ? area1 : area2, region.corners[tempi], region.corners[tempi2]));
+
 			}
 			idx2++;
 		}
 		idx++;
 	}
-	for (auto rp : regionPairs) {
-		qDebug() << "regionIdx1: " << rp.regionIdx1 << "regionIdx2: " << rp.regionIdx2 << "alpha: " << rp.alpha << " ratio: " << rp.ratio << " area: " << rp.smallerArea;
-	}
+	//qDebug() << "--------------------------";
+	//for (auto rp : regionPairs) {
+	//	qDebug() << "regionIdx1: " << rp.regionIdx1 << "regionIdx2: " << rp.regionIdx2 << "alpha: " << rp.alpha << " ratio: " << rp.ratio << " area: " << rp.smallerArea;
+	//}
 	return regionPairs;
 }
 MyViewer::Vector MyViewer::getSideVector(std::vector<int> tmpcorners, int i1, int i2) {
@@ -2295,4 +2477,134 @@ double MyViewer::calculateArea(Vector A, Vector B, Vector C, Vector D) {
 
 	double T = sqrt((s - a) * (s - b) * (s - c) * (s - d) - a * b * c * d * cos((alpha + gamma) / 2) * cos((alpha + gamma) / 2));
 	return T;
+}
+void MyViewer::getNewCornerIdxs(std::vector<int> corners, int commonCorner1Idx, int commonCorner2Idx, int* newCorner1Idx, int* newCorner2Idx) {
+	if (corners[0] == commonCorner1Idx) {
+		if (corners[1] == commonCorner2Idx) {
+			*newCorner1Idx = corners[3];
+			*newCorner2Idx = corners[2];
+		}
+		else {
+			*newCorner1Idx = corners[1];
+			*newCorner2Idx = corners[2];
+		}
+	}
+	else if (corners[1] == commonCorner1Idx) {
+		if (corners[2] == commonCorner2Idx) {
+			*newCorner1Idx = corners[0];
+			*newCorner2Idx = corners[3];
+		}
+		else {
+			*newCorner1Idx = corners[2];
+			*newCorner2Idx = corners[3];
+		}
+	}
+	else if (corners[2] == commonCorner1Idx) {
+		if (corners[3] == commonCorner2Idx) {
+			*newCorner1Idx = corners[1];
+			*newCorner2Idx = corners[0];
+		}
+		else {
+			*newCorner1Idx = corners[3];
+			*newCorner2Idx = corners[0];
+		}
+	}
+	else if (corners[3] == commonCorner1Idx) {
+		if (corners[0] == commonCorner2Idx) {
+			*newCorner1Idx = corners[2];
+			*newCorner2Idx = corners[1];
+		}
+		else {
+			*newCorner1Idx = corners[0];
+			*newCorner2Idx = corners[1];
+		}
+	}
+}
+
+void MyViewer::updateSeparatriceBreaks(int commonCornerIdx1, int commonCornerIdx2) {
+	int commonSeparatriceIdx;
+	int commonSeparatricePartIdx1;
+	int commonSeparatricePartIdx2;
+	int spfromI1 = -1;
+	int spfromI2 = -1;
+	int separatriceIdx = -1;
+	for (auto sp : corners[commonCornerIdx1].separatrices) {
+		qDebug() << "sp: " << sp.separatriceIdx;
+		for (auto sp2 : corners[commonCornerIdx2].separatrices) {
+			qDebug() << "sp2: " << sp2.separatriceIdx;
+
+			if (sp.separatriceIdx == sp2.separatriceIdx) {
+				int spfromI1Temp = sp.fromI < sp2.fromI ? sp.fromI : sp2.fromI;
+				int spfromI2Temp = sp.fromI < sp2.fromI ? sp2.fromI : sp.fromI;
+				if (spfromI1 == -1 || abs(spfromI1Temp - spfromI2Temp) < abs(spfromI1 - spfromI2)) {
+					spfromI1 = spfromI1Temp;
+					spfromI2 = spfromI2Temp;
+					separatriceIdx = sp.separatriceIdx;
+				}
+			}
+		}
+	}
+	if (spfromI1 != -1) {
+		if (spfromI1 != spfromI2) {
+
+			std::vector<int> toDelete;
+			int beforeNum = 0;
+			int afterNum = 0;
+			int betweenNum = 0;
+			for (size_t i = 0; i < separatriceBreaks[separatriceIdx].size(); i++)
+			{
+				if (separatriceBreaks[separatriceIdx][i] >= spfromI1 && separatriceBreaks[separatriceIdx][i] <= spfromI2) {
+					toDelete.push_back(i);
+					betweenNum++;
+				}
+				else if (separatriceBreaks[separatriceIdx][i] < spfromI1) {
+					beforeNum++;
+				}
+				else if (separatriceBreaks[separatriceIdx][i] > spfromI2) {
+					afterNum++;
+				}
+			}
+
+			toDelete.erase(std::unique(toDelete.begin(), toDelete.end()), toDelete.end());
+			std::sort(toDelete.begin(), toDelete.end(), std::greater<int>());
+			for (auto d : toDelete) {
+				separatriceBreaks[separatriceIdx].erase(separatriceBreaks[separatriceIdx].begin() + d);
+			}
+			if (betweenNum == 0) {
+				if (beforeNum % 2 == 0) {
+					//INSERT BOTH
+					separatriceBreaks[separatriceIdx].push_back(spfromI1);
+					separatriceBreaks[separatriceIdx].push_back(spfromI2);
+				}
+				else {
+					//INSERT NONE
+				}
+			}
+			else {
+				if (beforeNum % 2 == 0) {
+					//INSERT LOWER
+					separatriceBreaks[separatriceIdx].push_back(spfromI1);
+					if (betweenNum % 2 == 0) {
+						//INSERT UPPER
+						separatriceBreaks[separatriceIdx].push_back(spfromI2);
+					}
+				}
+				else {
+					if (betweenNum % 2 != 0) {
+						//INSERT UPPER
+						separatriceBreaks[separatriceIdx].push_back(spfromI2);
+					}
+				}
+			}
+			std::sort(separatriceBreaks[separatriceIdx].begin(), separatriceBreaks[separatriceIdx].end());
+			separatriceBreaks[separatriceIdx].erase(std::unique(separatriceBreaks[separatriceIdx].begin(), separatriceBreaks[separatriceIdx].end()), separatriceBreaks[separatriceIdx].end());
+		}
+	}
+}
+bool MyViewer::contains(std::vector<int> vector, int i) {
+	for (auto v : vector) {
+		if (v == i)
+			return true;
+	}
+	return false;
 }
