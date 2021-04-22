@@ -845,6 +845,18 @@ void MyViewer::draw() {
 	//	glLineWidth(1.0);
 	//	glColor3d(0, 0, 1.0);
 	//}
+	/*if (singularities.size() >= 4) {
+		glLineWidth(2.5);
+		glPointSize(10.0);
+		glColor3d(1, 0, 0);
+		glBegin(GL_POINTS);
+		glVertex3dv((singularities[2].pos + Vector(0.0, 0.0, 0.17)).data());
+	
+		glEnd();
+		glPointSize(1.0);
+		glLineWidth(1.0);
+		glColor3d(0, 0, 1.0);
+	}*/
 }
 void MyViewer::drawControlNet() const {
 	glDisable(GL_LIGHTING);
@@ -1038,6 +1050,21 @@ void MyViewer::drawRegions() const {
 	}
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	glEnd();
+	glColor3d(0.0, 1.0, 0.0);
+	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	glLineWidth(2.5);
+	idx = 0;
+	for (auto r : regions) {
+		if (idx == 29) {
+			glBegin(GL_POLYGON);
+			for (auto cIdx : r.corners) {
+				glNormal3dv(Vector(0, 0, -1).data());
+				glVertex3dv((corners[cIdx].pos + offset).data());
+			}
+			glEnd();
+		}
+		idx++;
+	}
 	glLineWidth(1.0f);
 	glColor3d(0.0, 0.0, 1.0);
 }
@@ -1179,14 +1206,23 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 
 			findPartitionCorners();
 			detectRegions();
+			streamLineSmoothing();
 			update();
 			break;
 		case Qt::Key_9:
 			mergeRegions();
 			update();
+			collapseRegions(3.0);
+			update();
+			streamLineSmoothing(2000);
+			update();
 			break;
 		case Qt::Key_T:
-			collapseRegions();
+			collapseRegions(3.0);
+			update();
+			break;
+		case Qt::Key_Z:
+			streamLineSmoothing();
 			update();
 			break;
 		default:

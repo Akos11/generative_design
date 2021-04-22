@@ -220,19 +220,23 @@ private:
 			double alpha;
 			double ratio;
 			double smallerArea;
+			double biggerArea;
 			int commonCorner1Idx;
 			int commonCorner2Idx;
-			regionPair(int regionIdx1_, int regionIdx2_, double alpha_, double ratio_, double smallerArea_, int commonCorner1Idx_, int commonCorner2Idx_) : regionIdx1(regionIdx1_), regionIdx2(regionIdx2_), alpha(alpha_), ratio(ratio_), smallerArea(smallerArea_), commonCorner1Idx(commonCorner1Idx_), commonCorner2Idx(commonCorner2Idx_)
+			regionPair(int regionIdx1_, int regionIdx2_, double alpha_, double ratio_, double smallerArea_,double biggerArea_, int commonCorner1Idx_, int commonCorner2Idx_) 
+				: regionIdx1(regionIdx1_), regionIdx2(regionIdx2_), alpha(alpha_), ratio(ratio_), smallerArea(smallerArea_), biggerArea(biggerArea_), commonCorner1Idx(commonCorner1Idx_), commonCorner2Idx(commonCorner2Idx_)
 			{}
 		};
 		void mergeRegions();
-		void collapseRegions();
+		void collapseRegions(double limit = 2.0);
 		std::vector<regionPair> getRegionPairs();
 		Vector getSideVector(std::vector<int> corners, int i1, int i2);
 		double calculateArea(Vector A, Vector B, Vector C, Vector D);
 		void getNewCornerIdxs(std::vector<int> corners, int commonCornerIdx1, int commonCornerIdx2, int* newCornerIdx1, int* newCornerIdx2);
 		void updateSeparatriceBreaks(int commonCornerIdx1, int commonCornerIdx2);
 		bool contains(std::vector<int> vector, int i);
+		void streamLineSmoothing(int iterations = 40);
+		void updateStreamLinesToCorner(int cornerIdx1, int cornerIdx2);
 
 	bool is_collapse_ok2(MyMesh::HalfedgeHandle v0v1);
 	//////////////////////
@@ -255,6 +259,7 @@ private:
 	std::vector<Singularity> singularities;
 	std::vector<std::vector<Vector>> separatrices;
 	std::vector<std::vector<int>> separatriceBreaks;
+
 	std::vector<std::vector<Vector>> separatrices2;
 	// Bezier
 	size_t degree[2];

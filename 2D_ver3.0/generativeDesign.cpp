@@ -1143,9 +1143,11 @@ void MyViewer::findSeparatrices() {
 }
 void MyViewer::findSeparatrices2() {
 	double r = 0.05;
+	int idx = 0;
 	for (auto sing : singularities) {
 		int countSep = 0;
-		for (double alpha = 0; alpha < 3.14159*2; alpha+=0.002)
+		double maxAlpha = 3.14159 * 2;
+		for (double alpha = 0; alpha < maxAlpha; alpha+=0.002)
 		{
 			Vector P = sing.pos + Vector(cos(alpha) * r, sin(alpha) * r,0);
 			double w[3];
@@ -1183,11 +1185,14 @@ void MyViewer::findSeparatrices2() {
 
 				separatrices.push_back(separatrice);
 				countSep++;
+				if (alpha < 0.1)
+					maxAlpha -= 0.1;
 				alpha += 0.1;
 			}
 
 		}
-		qDebug() << countSep;
+		qDebug() <<"countSep: " <<  countSep << "Singularity: " << idx;
+		idx++;
 	}
 	//eliminateDuplicateSeparatrices(0.5);
 }
@@ -2166,15 +2171,20 @@ void MyViewer::updateRegionSides() {
 void MyViewer::mergeRegions() {
 	bool collapsed = true;
 	double ratioLimit = 0.1;
-	double alphaLimit = 0.1;
+	double alphaLimit = 0.02;
 	double areaLimit = 1000;
-	double epsilon = 0.03;
-	for (int j = 0; j < 45; j ++)
+	double epsilon = 0.15;
+	int count = 0;
+	int ratioIterations = 45;
+	int alphaIterations = 6;
+	for (int j = 0; j < ratioIterations; j ++)
 	{
-		alphaLimit = 0.1;
-		for (int i = 0; i < 6; i ++)
+		alphaLimit = 0.02;
+		for (int i = 0; i < alphaIterations; i ++)
 		{
+			count++;
 			collapsed = true;
+			
 			while (collapsed) {
 				collapsed = false;
 				std::vector<regionPair> regionPairs = getRegionPairs();
@@ -2182,20 +2192,35 @@ void MyViewer::mergeRegions() {
 
 				double minAlpha = 99999999999;
 				double minSmallerArea = 99999999999;
+				double minBiggerArea = 99999999999;
 				double minRatio = 9999999;
 				int minIdx = -1;
 				int idx = 0;
 				for (auto rp : regionPairs) {
-					if (rp.ratio < ratioLimit && rp.smallerArea < areaLimit && rp.alpha < alphaLimit) {
+					
+					
+					if (rp.ratio < ratioLimit && rp.smallerArea < areaLimit && rp.alpha < alphaLimit || (count > alphaIterations * ratioIterations * 0.9 && rp.smallerArea < 2)) {
+						
 						if (rp.ratio < minRatio - epsilon) {
 							minAlpha = rp.alpha;
 							minSmallerArea = rp.smallerArea;
+							minBiggerArea = rp.biggerArea;
 							minRatio = rp.ratio;
 							minIdx = idx;
 						}
 						if (abs(rp.ratio - minRatio) < epsilon && rp.alpha < minAlpha) {
 							minAlpha = rp.alpha;
 							minSmallerArea = rp.smallerArea;
+							minBiggerArea = rp.biggerArea;
+
+							minRatio = rp.ratio;
+							minIdx = idx;
+						}
+						if (abs(rp.ratio - minRatio) < epsilon && abs(rp.alpha- minAlpha) < epsilon && rp.biggerArea < minBiggerArea) {
+							minAlpha = rp.alpha;
+							minSmallerArea = rp.smallerArea;
+							minBiggerArea = rp.biggerArea;
+
 							minRatio = rp.ratio;
 							minIdx = idx;
 						}
@@ -2221,7 +2246,7 @@ void MyViewer::mergeRegions() {
 					collapsed = true;
 				}
 			}
-			alphaLimit += 0.1;
+			alphaLimit += 0.01;
 		}
 		if (j < 25)
 			ratioLimit += 0.1;
@@ -2239,17 +2264,23 @@ void MyViewer::mergeRegions() {
 	}*/
 
 }
-void MyViewer::collapseRegions() {
-	double limit = 2.0;
+void MyViewer::collapseRegions(double limit) {
 	int idx = 0;
+	std::vector<int> regionsToDelete;
 	for (auto r : regions) {
 		float side1Length = (corners[r.corners[0]].pos - corners[r.corners[1]].pos).length();
 		float side2Length = (corners[r.corners[1]].pos - corners[r.corners[2]].pos).length();
 		float side3Length = (corners[r.corners[2]].pos - corners[r.corners[3]].pos).length();
 		float side4Length = (corners[r.corners[3]].pos - corners[r.corners[0]].pos).length();
 
+		bool collapsed = false;
 		if ((side1Length + side3Length) / 2 < limit) {
-			qDebug() << "idx: " << idx;
+			if (idx == 29) {
+				qDebug() << "side1Length: " << side1Length;
+				qDebug() << "side2Length: " << side2Length;
+				qDebug() << "side3Length: " << side3Length;
+				qDebug() << "side4Length: " << side4Length;
+			}
 			bool otherRegionwithSameSide = false;
 			int idx2 = 0;
 			for (auto r2 : regions) {
@@ -2261,45 +2292,37 @@ void MyViewer::collapseRegions() {
 				idx2++;
 			}
 			if (!otherRegionwithSameSide) {
-				qDebug() <<"COLLAPSE1";
-				qDebug() << "Corner1: " << r.corners[0]; 
-				for (auto sp : corners[r.corners[0]].separatrices)
-				{
-					qDebug() << "\t" << "sp index: " << sp.separatriceIdx << "fromI: " << sp.fromI << "toI: " << sp.toI;
+				if (corners[r.corners[0]].boundary && corners[r.corners[3]].boundary) {
+					corners[r.corners[1]].pos = corners[r.corners[0]].pos;
+					corners[r.corners[2]].pos = corners[r.corners[3]].pos;
 				}
-				qDebug() << "Corner2: " << r.corners[3];
-				for (auto sp : corners[r.corners[3]].separatrices)
-				{
-					qDebug() << "\t" << "sp index: " << sp.separatriceIdx << "fromI: " << sp.fromI << "toI: " << sp.toI;
+				else if (corners[r.corners[1]].boundary && corners[r.corners[2]].boundary) {
+					corners[r.corners[0]].pos = corners[r.corners[1]].pos;
+					corners[r.corners[3]].pos = corners[r.corners[2]].pos;
 				}
-
-				corners[r.corners[0]].pos = Vector(0, 0, 0);// corners[r.corners[1]].pos;
-				corners[r.corners[3]].pos = Vector(0, 0, 0);//corners[r.corners[2]].pos;
-				qDebug() << "Before: **************************************";
-				int tidx = 0;
-				for (auto sb : separatriceBreaks) {
-					qDebug() << "separatriceBreak: " << tidx;
-					for (auto c : sb) {
-						qDebug() << "\t " << c;
-					}
-					tidx++;
+				else {
+					corners[r.corners[0]].pos = (corners[r.corners[1]].pos + corners[r.corners[0]].pos) / 2.0;
+					corners[r.corners[1]].pos = corners[r.corners[0]].pos;
+					corners[r.corners[3]].pos = (corners[r.corners[2]].pos + corners[r.corners[3]].pos) / 2.0;
+					corners[r.corners[2]].pos = corners[r.corners[3]].pos;
 				}
 				updateSeparatriceBreaks(r.corners[0], r.corners[3]);
-				qDebug() << "After: **************************************";
-
-				tidx = 0;
-				for (auto sb : separatriceBreaks) {
-					qDebug() << "separatriceBreak: " << tidx ;
-					for (auto c : sb) {
-						qDebug() << "\t " << c;
-					}
-					tidx++;
-				}
-				break;
+				updateStreamLinesToCorner(r.corners[0], r.corners[1]);
+				updateStreamLinesToCorner(r.corners[2],r.corners[3]);
+				//updateSeparatriceBreaks(r.corners[0], r.corners[1]);
+				//updateSeparatriceBreaks(r.corners[2], r.corners[3]);
+				regionsToDelete.push_back(idx);
+				collapsed = true;
+				//break;
 			}
 		}
-		else if ((side2Length + side4Length) / 2 < 5.0) {
-			qDebug() << "idx: " << idx;
+		if (!collapsed && (side2Length + side4Length) / 2 < limit) {
+			if (idx == 29) {
+				qDebug() << "side1Length: " << side1Length;
+				qDebug() << "side2Length: " << side2Length;
+				qDebug() << "side3Length: " << side3Length;
+				qDebug() << "side4Length: " << side4Length;
+			}
 			bool otherRegionwithSameSide = false;
 			int idx2 = 0;
 			for (auto r2 : regions) {
@@ -2311,17 +2334,36 @@ void MyViewer::collapseRegions() {
 				idx2++;
 			}
 			if (!otherRegionwithSameSide) {
-				qDebug() << "COLLAPSE2";
-				qDebug() << "Corner1: " << r.corners[0] << "Corner2: " << r.corners[3];
-
-				corners[r.corners[1]].pos = corners[r.corners[2]].pos;
-				corners[r.corners[0]].pos = corners[r.corners[3]].pos;
+				if (corners[r.corners[1]].boundary && corners[r.corners[0]].boundary) {
+					corners[r.corners[2]].pos = corners[r.corners[1]].pos;
+					corners[r.corners[3]].pos = corners[r.corners[0]].pos;
+				}
+				else if (corners[r.corners[2]].boundary && corners[r.corners[3]].boundary) {
+					corners[r.corners[1]].pos = corners[r.corners[2]].pos;
+					corners[r.corners[0]].pos = corners[r.corners[3]].pos;
+				}
+				else {
+					corners[r.corners[1]].pos = (corners[r.corners[2]].pos + corners[r.corners[1]].pos) / 2.0;
+					corners[r.corners[2]].pos = corners[r.corners[1]].pos;
+					corners[r.corners[0]].pos = (corners[r.corners[3]].pos + corners[r.corners[0]].pos) / 2.0;
+					corners[r.corners[3]].pos = corners[r.corners[0]].pos;
+				}
 				updateSeparatriceBreaks(r.corners[1], r.corners[0]);
+				updateStreamLinesToCorner(r.corners[1], r.corners[2]);
+				updateStreamLinesToCorner(r.corners[0], r.corners[3]);
+				//updateSeparatriceBreaks(r.corners[1], r.corners[2]);
+				//updateSeparatriceBreaks(r.corners[3], r.corners[0]);
+				regionsToDelete.push_back(idx);
 
-				break;
+				//break;
 			}
 		}
 		idx++;
+	}
+	regionsToDelete.erase(std::unique(regionsToDelete.begin(), regionsToDelete.end()), regionsToDelete.end());
+	std::sort(regionsToDelete.begin(), regionsToDelete.end(), std::greater<int>());
+	for (auto d : regionsToDelete) {
+		regions.erase(regions.begin() + d);
 	}
 }
 std::vector<MyViewer::regionPair> MyViewer::getRegionPairs() {
@@ -2428,7 +2470,7 @@ std::vector<MyViewer::regionPair> MyViewer::getRegionPairs() {
 				//	qDebug() << "----------------";
 
 				//}
-				regionPairs.push_back(regionPair(idx, idx2, alpha, ratio, area1 < area2 ? area1 : area2, region.corners[tempi], region.corners[tempi2]));
+				regionPairs.push_back(regionPair(idx, idx2, alpha, ratio, area1 < area2 ? area1 : area2, area1 < area2 ? area2 : area1, region.corners[tempi], region.corners[tempi2]));
 
 			}
 			idx2++;
@@ -2607,4 +2649,78 @@ bool MyViewer::contains(std::vector<int> vector, int i) {
 			return true;
 	}
 	return false;
+}
+void MyViewer::streamLineSmoothing(int iterations) {
+	std::vector<std::vector<int>> separatriceCorners(separatrices.size());
+
+
+	for (auto region : regions) {
+		for (auto corner : region.corners) {
+			for (auto sep : corners[corner].separatrices) {
+				if ((separatrices[sep.separatriceIdx][sep.fromI] - corners[corner].pos).length() < (separatrices[sep.separatriceIdx][sep.toI] - corners[corner].pos).length())
+					separatriceCorners[sep.separatriceIdx].push_back(sep.fromI);
+				else
+					separatriceCorners[sep.separatriceIdx].push_back(sep.toI);
+			}
+		}
+	}
+	for (size_t iteration = 0; iteration < iterations; iteration++)
+	{
+		for (size_t j = 0; j < separatrices.size(); j++)
+		{
+			for (size_t i = 1; i < separatrices[j].size() - 1; i++)
+			{
+				bool corner = false;
+				for (auto sepBreak : separatriceBreaks[j]) {
+					if (i == sepBreak)
+						corner = true;
+				}
+				for (auto sepBreak : separatriceCorners[j]) {
+					if (i == sepBreak)
+						corner = true;
+				}
+				if (!corner) {
+					MyMesh::Point pPrev = separatrices[j][i - 1];
+					MyMesh::Point pNext = separatrices[j][i + 1];
+					MyMesh::Point p = separatrices[j][i];
+					MyMesh::Point L = 0.5 * (pNext - p) + 0.5 * (pPrev - p);
+					separatrices[j][i] = p + 0.5 * L;
+				}
+			}
+		}
+	}
+}
+void MyViewer::updateStreamLinesToCorner(int cornerIdx1, int cornerIdx2) {
+	//qDebug() << cornerIdx1 << " - pos: (" << corners[cornerIdx1].pos[0] << ", " << corners[cornerIdx1].pos[1] << ", " << corners[cornerIdx1].pos[2]
+	//	<< "), Boundary: " << corners[cornerIdx1].boundary << ", BoundaryV1: " << corners[cornerIdx1].boundaryV1.idx() << ", BoundaryV2: " << corners[cornerIdx1].boundaryV2.idx();
+	//for (auto sp : corners[cornerIdx1].separatrices) {
+	//	qDebug() << "\t" << "sp index: " << sp.separatriceIdx << "fromI: " << sp.fromI << "toI: " << sp.toI;
+	//}
+	for (auto sp : corners[cornerIdx1].separatrices) {
+		int iCloser = sp.fromI;
+		MyMesh::Point cornerP = corners[cornerIdx1].pos;
+		if (iCloser != 0 && (cornerP - separatrices[sp.separatriceIdx][sp.toI]).length() < (cornerP - separatrices[sp.separatriceIdx][sp.fromI]).length()) {
+			iCloser = sp.toI;
+		}
+		separatrices[sp.separatriceIdx][iCloser] = cornerP;
+		separatrices[sp.separatriceIdx][sp.fromI] = cornerP;
+		separatrices[sp.separatriceIdx][sp.toI] = cornerP;
+
+	}
+	//qDebug() << cornerIdx2 << " - pos: (" << corners[cornerIdx2].pos[0] << ", " << corners[cornerIdx2].pos[1] << ", " << corners[cornerIdx2].pos[2]
+	//	<< "), Boundary: " << corners[cornerIdx2].boundary << ", BoundaryV1: " << corners[cornerIdx2].boundaryV1.idx() << ", BoundaryV2: " << corners[cornerIdx2].boundaryV2.idx();
+	//for (auto sp : corners[cornerIdx2].separatrices) {
+	//	qDebug() << "\t" << "sp index: " << sp.separatriceIdx << "fromI: " << sp.fromI << "toI: " << sp.toI;
+	//}
+	//qDebug() << "-------------------------------------------------";
+	for (auto sp : corners[cornerIdx2].separatrices) {
+		int iCloser = sp.fromI;
+		MyMesh::Point cornerP = corners[cornerIdx2].pos;
+		if (iCloser != 0 && (cornerP - separatrices[sp.separatriceIdx][sp.toI]).length() < (cornerP - separatrices[sp.separatriceIdx][sp.fromI]).length()) {
+			iCloser = sp.toI;
+		}
+		separatrices[sp.separatriceIdx][iCloser] = cornerP;
+		separatrices[sp.separatriceIdx][sp.fromI] = cornerP;
+		separatrices[sp.separatriceIdx][sp.toI] = cornerP;
+	}
 }
