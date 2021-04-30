@@ -798,10 +798,10 @@ void MyViewer::draw() {
 	glEnd();
 	glPointSize(1.0);
 	glLineWidth(1.0);
-	/*if (show_PDEu)
-		drawPDEu();
-	if (show_PDEcross)
-		drawPDEcross();*/
+	//if (show_PDEu)
+	//	drawPDEu();
+	//if (show_PDEcross)
+	//	drawPDEcross();
 	glLineWidth(2.5);
 	glPointSize(8.0);
 	glBegin(GL_POINTS);
@@ -816,7 +816,7 @@ void MyViewer::draw() {
 		//for (auto c : corners)
 		//{
 		//	//qDebug() << idx++;
-		//	glVertex3dv((c.pos + Vector(0.0, 0.0, 0.11)).data());
+		//	glVertex3dv((c->pos + Vector(0.0, 0.0, 0.11)).data());
 		//}
 	}
 	glEnd();
@@ -826,25 +826,33 @@ void MyViewer::draw() {
 		drawSeparatrices();
 	drawRegions();
 	///////////////////////////
-	//if (corners.size() >= 88) {
-	//	glLineWidth(2.5);
-	//	glPointSize(10.0);
-	//	glColor3d(1, 0, 0);
-	//	glBegin(GL_POINTS);
-	//	glVertex3dv((corners[136].pos + Vector(0.0, 0.0, 0.13)).data());
-	//	glColor3d(0, 1, 0);
-	//	glVertex3dv((corners[223].pos + Vector(0.0, 0.0, 0.13)).data());
-	//	//glColor3d(0, 0, 1);
-	//	//glVertex3dv((corners[129].pos + Vector(0.0, 0.0, 0.13)).data());
-	//	//glColor3d(1, 1, 0);
-	//	//glVertex3dv((corners[102].pos + Vector(0.0, 0.0, 0.13)).data());
-	//	//glColor3d(0, 1, 1);
-	//	//glVertex3dv((corners[20].pos + Vector(0.0, 0.0, 0.13)).data());
-	//	glEnd();
-	//	glPointSize(1.0);
-	//	glLineWidth(1.0);
-	//	glColor3d(0, 0, 1.0);
-	//}
+	if (corners.size() >= 330) {
+		glLineWidth(2.5);
+		glPointSize(10.0);
+		glColor3d(1, 0, 0);
+		glBegin(GL_POINTS);
+		glNormal3dv(Vector(0, 0, 1).data());
+		glVertex3dv((corners[330]->pos + Vector(0.0, 0.0, 0.25)).data());
+		glColor3d(0, 1, 0);
+		glNormal3dv(Vector(0, 0, 1).data());
+		glVertex3dv((corners[329]->pos + Vector(0.0, 0.0, 0.25)).data());
+		/*glColor3d(0, 0, 1);
+		glNormal3dv(Vector(0, 0, 1).data());
+		glVertex3dv((corners[313]->pos + Vector(0.0, 0.0, 0.25)).data());
+
+		glColor3d(1, 1, 0);
+		glNormal3dv(Vector(0, 0, 1).data());
+		glVertex3dv((corners[17]->pos + Vector(0.0, 0.0, 0.25)).data());
+
+		glColor3d(0, 1, 1);
+		glNormal3dv(Vector(0, 0, 1).data());
+		glVertex3dv((corners[312]->pos + Vector(0.0, 0.0, 0.25)).data());*/
+
+		glEnd();
+		glPointSize(1.0);
+		glLineWidth(1.0);
+		glColor3d(0, 0, 1.0);
+	}
 	/*if (singularities.size() >= 4) {
 		glLineWidth(2.5);
 		glPointSize(10.0);
@@ -1008,19 +1016,19 @@ void MyViewer::drawSeparatrices() {
 		glEnd();
 		idx++;
 	}
-	//glLineWidth(3.0);
-	//glColor3d(1.0, 1.0, 0.0);
-	//int idx = 0;
-	//for (auto sep : separatrices) {
-	//	if (idx ==20) {
-	//		glBegin(GL_LINE_STRIP);
-	//		for (auto p : sep) {
-	//			glVertex3dv((p + Vector(0.0, 0.0, 0.15)).data());
-	//		}
-	//		glEnd();
-	//	}
-	//	idx++;
-	//}
+	glLineWidth(3.0);
+	glColor3d(1.0, 1.0, 0.0);
+	idx = 0;
+	for (auto sep : separatrices) {
+		if (idx == tempIdx) {
+			glBegin(GL_LINE_STRIP);
+			for (auto p : sep) {
+				glVertex3dv((p + Vector(0.0, 0.0, 0.15)).data());
+			}
+			glEnd();
+		}
+		idx++;
+	}
 	glColor3d(0.0, 0.0, 0.0);
 	glLineWidth(1.0);
 }
@@ -1043,7 +1051,7 @@ void MyViewer::drawRegions() const {
 			//glEnd();
 			glColor3d(0.0, 0.0, 1.0);
 			for (auto cIdx : r.corners) {
-				glVertex3dv((corners[cIdx].pos + offset).data());
+				glVertex3dv((corners[cIdx]->pos + offset).data());
 			}
 		//}
 		idx++;
@@ -1055,11 +1063,11 @@ void MyViewer::drawRegions() const {
 	glLineWidth(2.5);
 	idx = 0;
 	for (auto r : regions) {
-		if (idx == 29) {
+		if (idx == tempIdx) {
 			glBegin(GL_POLYGON);
 			for (auto cIdx : r.corners) {
 				glNormal3dv(Vector(0, 0, -1).data());
-				glVertex3dv((corners[cIdx].pos + offset).data());
+				glVertex3dv((corners[cIdx]->pos + offset).data());
 			}
 			glEnd();
 		}
@@ -1105,6 +1113,8 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			
 			singularities.clear();
 			separatrices.clear();
+			for (auto c : corners)
+				delete c;
 			corners.clear();
 			regions.clear();
 			if (model_type == ModelType::MESH)
@@ -1208,6 +1218,7 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			detectRegions();
 			streamLineSmoothing();
 			update();
+
 			break;
 		case Qt::Key_9:
 			mergeRegions();
@@ -1218,11 +1229,28 @@ void MyViewer::keyPressEvent(QKeyEvent* e) {
 			update();
 			break;
 		case Qt::Key_T:
-			collapseRegions(3.0);
+			smoothBoundary();
 			update();
 			break;
 		case Qt::Key_Z:
-			streamLineSmoothing();
+			//collapseRegions(3.0);
+			findTriangleRegions();
+			update();
+			break;
+		case Qt::Key_U:
+			//eliminateDuplicateSeparatrices(0.8);
+
+			streamLineSmoothing(2000);
+			update();
+			break;
+		case Qt::Key_X:
+			tempIdx++;
+			qDebug() << "tempIdx: " << tempIdx;
+			update();
+			break;
+		case Qt::Key_Y:
+			tempIdx--;
+			qDebug() << "tempIdx: " << tempIdx;
 			update();
 			break;
 		default:

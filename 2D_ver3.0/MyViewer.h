@@ -115,12 +115,17 @@ private:
 		MyMesh::VertexHandle boundaryV1;
 		MyMesh::VertexHandle boundaryV2;
 		bool noSeparatrice;
+		std::vector<int> regionIdxs;
 		Corner(Vector pos_, std::vector<SeparatricePart> separatrices_, bool boundary_, MyMesh::VertexHandle boundaryV1_ = MyMesh::VertexHandle(), MyMesh::VertexHandle boundaryV2_ = MyMesh::VertexHandle(), bool noSeparatrice_ = false)
 			: pos(pos_), separatrices(separatrices_), boundary(boundary_), boundaryV1(boundaryV1_), boundaryV2(boundaryV2_), noSeparatrice(noSeparatrice_) {}
 		Corner()
 			: pos(Vector(0,0,0)), separatrices(std::vector<SeparatricePart>()), boundary(false), boundaryV1(MyMesh::VertexHandle()), boundaryV2(MyMesh::VertexHandle()) {}
+		void copyAttribs(Corner* other) {
+			for (auto sepPart : other->separatrices)
+				separatrices.push_back(sepPart);
+		}
 	};
-	std::vector<Corner> corners;
+	std::vector<Corner*> corners;
 	struct Region {
 		std::vector<int> corners;
 		Region(std::vector<int> corners_): corners(corners_) {
@@ -191,7 +196,7 @@ private:
 		void findSingularities();
 		void findSeparatrices();
 		void findSeparatrices2();
-		void followStreamLine(Vector v, Vector prevDir, std::vector<Vector>* streamline,int separatriceIdx, double step = 0.5, double iterations = 2000);
+		void followStreamLine(Vector v, Vector prevDir, std::vector<Vector>* streamline,int separatriceIdx, double step = 0.5, double iterations = 4000);
 		void eliminateDuplicateSeparatrices(double limit);
 		void refreshSeparatricePartsAtFaces();
 		void buildSeparatrices(std::vector<Vector>* separatice,Vector dir, MyMesh::VertexHandle v1, MyMesh::VertexHandle v2, MyMesh::FaceHandle f);
@@ -229,6 +234,8 @@ private:
 		};
 		void mergeRegions();
 		void collapseRegions(double limit = 2.0);
+		bool collapseRegion(Region region, int regionIdx, int collapseIdx0, int collapseIdx1, int collapseIdx2, int collapseIdx3);
+		std::vector<int> hasBetween(Region r2, int corner1, int corner2);
 		std::vector<regionPair> getRegionPairs();
 		Vector getSideVector(std::vector<int> corners, int i1, int i2);
 		double calculateArea(Vector A, Vector B, Vector C, Vector D);
@@ -237,8 +244,11 @@ private:
 		bool contains(std::vector<int> vector, int i);
 		void streamLineSmoothing(int iterations = 40);
 		void updateStreamLinesToCorner(int cornerIdx1, int cornerIdx2);
-
+		void mergeMoreRegions();
+		void findTriangleRegions();
+		void smoothBoundary();
 	bool is_collapse_ok2(MyMesh::HalfedgeHandle v0v1);
+	int tempIdx = 0;
 	//////////////////////
 	// Member variables //
 	//////////////////////
